@@ -524,33 +524,78 @@
     .center-info { width: 70%; }
     .center-logo { font-size: 30px; }
   }
+  /* 手机窄屏：两位对手并排在上、主玩家手牌在下、操作台固定屏幕底部 */
   @media (max-width: 620px){
-    .table-felt { --s: 0.5; }
+    .table-felt { --s: 0.5; height: calc(100vh - 310px); min-height: 480px; }
     .table-rim { padding: 18px 10px; }
-    .seat { width: 94%; left: 3% !important; right: auto !important; transform: none !important; }
-    .seat-tl { top: 8px; } .seat-tr { top: 210px; } .seat-bm { bottom: 8px; }
-    .table-felt { height: 720px; }
-    .center-info { width: 88%; top: 50%; }
-    .center-logo { font-size: 24px; }
-    .banner { font-size: 14px; }
-    .dock {
-      top: auto; bottom: 10px; width: 96%;
-      flex-direction: column; gap: 6px; padding: 10px 12px;
+    .table-wrap { padding-bottom: 0; }
+    .seat-tl, .seat-tr { top: 8px; width: 48%; left: 1% !important; right: auto !important; transform: none !important; }
+    .seat-tr { left: auto !important; right: 1% !important; }
+    .seat-bm { bottom: 18px; left: 50%; transform: translateX(-50%); width: 98%; }
+    /* 上方两座改为左头像右信息，手牌与出牌区整行 */
+    .seat-tl, .seat-tr {
+      grid-template-columns: auto 1fr;
+      grid-template-areas:
+        "av info"
+        "hand hand"
+        "played played";
+      column-gap: calc(10px * var(--s));
     }
-    .d-btns { width: 100%; justify-content: center; flex-wrap: wrap; }
-    .d-btns button { flex: 1; min-width: 108px; }
-    .d-prompt { font-size: 14px; text-align: center; }
-    .d-hint { text-align: center; }
-    .toast { top: 13%; max-width: 92%; white-space: normal; text-align: center; }
-    .pool, .req { font-size: 12px; padding: 4px 12px; }
+    /* 下方主玩家：出牌区贴近中央提示区，手牌占满整行宽度 */
+    .seat-bm {
+      grid-template-areas:
+        "played played"
+        "av info"
+        "hand hand";
+    }
+    /* 上两座出牌区向中央聚拢（仅单组出牌时；两组时保持居中避免溢出） */
+    .seat-tl .s-played:not(.multi) { justify-content: flex-end; }
+    .seat-tr .s-played:not(.multi) { justify-content: flex-start; }
+    .center-info { width: 92%; top: 47%; gap: 2px; }
+    .center-logo { display: none; }
+    .banner { font-size: 13.5px; }
+    .banner .sub { font-size: 12px; }
+    /* 手机端关键文字不小于可读尺寸 */
+    .s-name { font-size: 15px; }
+    .s-type { font-size: 12px; }
+    .s-stats { font-size: 13px; }
+    .s-status { font-size: 12px; }
+    .s-empty { font-size: 12px; }
+    .turn-tag { font-size: 11px; padding: 2px 8px; }
+    .base-badge { font-size: 12px; }
+    .join-badge { font-size: 11.5px; }
+    .avatar { width: 34px; height: 34px; font-size: 17px; }
+    /* 主玩家手牌加高：容纳选牌上浮，避免顶部被裁切 */
+    .seat-bm .s-hand { min-height: calc(248px * var(--s)); }
+    /* 三位玩家已出牌放大：牌面与标签更易读 */
+    .s-played { gap: 10px; min-height: 72px; }
+    .p-cards { gap: 6px; }
+    .slot { width: 32px; height: 47px; border-radius: 7px; }
+    .card.mini { width: 32px; height: 47px; border-radius: 8px; }
+    .card.mini .mid.joker .j-star { font-size: 9px; }
+    .card.mini .mid.joker .j-word { font-size: 10px; }
+    .p-stage { font-size: 11px; padding: 2px 8px; }
+    .p-type { font-size: 12px; }
+    .p-win { font-size: 12px; }
+    .p-meta { gap: 6px; }
+    .card.face .corner { font-size: 13px; top: 7px; left: 7px; }
+    .card.face .corner .suit { font-size: 11px; }
+    .card.face .mid { font-size: 30px; }
+    .toast { top: 12%; max-width: 92%; white-space: normal; text-align: center; }
+    .pool, .req { font-size: 12px; padding: 3px 10px; }
+    /* 触控优化：避免双击缩放延迟与 iOS 输入框自动放大 */
+    button, .card, select, input, label { touch-action: manipulation; }
+    .nick-input, .seat-pname, .llm-grid input, .llm-grid select { font-size: 16px !important; }
+    body { -webkit-tap-highlight-color: rgba(255,255,255,.15); }
   }
 
-  /* 窄屏：操作台固定到底部 */
   @media (max-width: 700px){
+    .table-wrap { padding-bottom: 0; }
     .dock {
-      top: auto !important; left: 50% !important;
-      bottom: 10px; transform: translateX(-50%);
+      position: fixed !important; top: auto !important; left: 50% !important; right: auto !important;
+      bottom: max(10px, env(safe-area-inset-bottom)); transform: translateX(-50%);
       flex-direction: column; gap: 6px; padding: 10px 12px; width: 96%;
+      z-index: 40; box-shadow: 0 8px 30px rgba(0,0,0,.6);
     }
     .d-btns { width: 100%; justify-content: center; flex-wrap: wrap; }
     .d-btns button { flex: 1; min-width: 108px; }
@@ -1926,6 +1971,7 @@
     if (p1.length) html += playedBlock(T('playedRound1'), p1, g.p1Ranked === null && !debugMode, p1Meta(seat));
     if (p2.length) html += playedBlock(T('playedRound2'), p2, g.p2Ranked === null && !debugMode, p2Meta(seat));
     box.innerHTML = html;
+    box.classList.toggle('multi', !!p1.length && !!p2.length);
   }
 
   /* ---------- 桌面中央出牌展示 ---------- */
@@ -2170,9 +2216,10 @@
       const list = g.hands[seat].map((c, i) => ({i, c})).filter(x => visHand.includes(x.c)).sort((a, b) => E.compareCards(a.c, b.c));
       const CARD_W = 102 * SC;
       const avail = Math.max(120, handBox.clientWidth - 4);
+      const MAX_STEP = (window.innerWidth <= 620 ? 64 : 44) * SC;
       let step = 51 * SC;
       if (list.length > 1){
-        step = Math.max(16 * SC, Math.min(44 * SC, Math.floor((avail - CARD_W) / (list.length - 1))));
+        step = Math.max(16 * SC, Math.min(MAX_STEP, Math.floor((avail - CARD_W) / (list.length - 1))));
       }
       handBox.dataset.step = step;
       const fanW = CARD_W + (list.length - 1) * step;
