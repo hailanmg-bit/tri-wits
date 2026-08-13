@@ -551,6 +551,9 @@
     /* 上两座出牌区向中央聚拢（仅单组出牌时；两组时保持居中避免溢出） */
     .seat-tl .s-played:not(.multi) { justify-content: flex-end; }
     .seat-tr .s-played:not(.multi) { justify-content: flex-start; }
+    /* 两轮出牌（multi）时：上两座改为两行上下排列，并隐藏其牌背行腾出空间 */
+    .seat-tl .s-played.multi, .seat-tr .s-played.multi { flex-direction: column; align-items: center; }
+    .seat-tl.multi .s-hand.backs, .seat-tr.multi .s-hand.backs { display: none; }
     /* 上两座手牌为牌背时压矮，给中央提示区腾出空间；真人坐上方明牌时保持原高度 */
     .seat-tl .s-hand.backs, .seat-tr .s-hand.backs { min-height: calc(120px * var(--s)); }
     .center-info { width: 92%; top: 47%; gap: calc(4px * var(--s)); }
@@ -617,6 +620,7 @@
       <button class="ghost" id="btnSound" title="音效开关">🔊</button>
       <button class="ghost" id="btnRules" hidden>规则</button>
       <button class="ghost" id="btnNew" hidden>新游戏</button>
+      <button class="ghost" id="btnRank">🏆 排行榜</button>
       <button class="ghost" id="btnLang">EN</button>
     </div>
   </header>
@@ -771,6 +775,7 @@
 </div>
 
 <script src="engine.js"></script>
+<script src="supabase-config.js"></script>
 <script>
 (function(){
   const E = window.GameEngine;
@@ -782,6 +787,7 @@
       setupTitle: '🎲 自由模式',
       setupDesc: '为三个座位选择「人」、「电脑」或「AI大模型」。三人热座：把设备轮流交给各玩家选牌。<br>只有轮到操作的玩家能看到自己的手牌；对手的牌以牌背显示，只露出张数。',
       btnStart: '开始游戏',
+      btnRank: '🏆 排行榜',
       hardMode: '困难模式（限时出牌）',
       hardDesc: '第一回合第一阶段限 30 秒，其余每次操作限 15 秒；超时自动出最大三张/跳过，回合自动进入下一回合。',
       nickLabel: '玩家', nickSlogan: '，请输入你的昵称，开始游玩博弈牌！', nickPlaceholder: '输入昵称',
@@ -888,6 +894,7 @@
       setupTitle: '🎲 Free Mode',
       setupDesc: 'Choose "Human", "Bot", or "AI Model" for each seat. Hot-seat: pass the device to each player when it is their turn.<br>Only the active player sees their hand; opponents\' cards are shown face-down with just the count.',
       btnStart: 'Start Game',
+      btnRank: '🏆 Ranks',
       hardMode: 'Hard Mode (timed plays)',
       hardDesc: 'Round 1 Phase 1: 30s; every other action: 15s. Timeout plays the 3 strongest cards or skips; rounds advance automatically.',
       nickLabel: 'Player', nickSlogan: ', enter your nickname and start playing Tti-Wits!', nickPlaceholder: 'Nickname',
@@ -1019,6 +1026,7 @@
     const bs = $('btnStart'); if (bs) bs.textContent = T('btnStart');
     const br = $('btnRules'); if (br) br.textContent = T('btnRules');
     const bn = $('btnNew'); if (bn) bn.textContent = T('btnNew');
+    const bk = $('btnRank'); if (bk) bk.textContent = T('btnRank');
     const hl = $('hardLabel'); if (hl) hl.textContent = T('hardMode');
     const hd = $('hardDesc'); if (hd) hd.textContent = T('hardDesc');
     const nl = $('nickLabel'); if (nl) nl.textContent = T('nickLabel');
@@ -1261,6 +1269,91 @@
 
   function saveFreeStats(p){
     try { localStorage.setItem(FREE_STATS_KEY, JSON.stringify(p)); } catch(e){}
+  }
+
+  /* ================= 通关验证（全部关卡完成检测 + 玩家统计） ================= */
+  const VERIFY_SENT_KEY = 'pokerVerifySent';
+  const VERIFY_QUEUE_KEY = 'pokerVerifyQueue';
+
+  // 每个设备生成一个固定 ID，用于服务器去重与统计（不涉及隐私，仅随机串）
+  function getDeviceId(){
+    let id = '';
+    try { id = localStorage.getItem('pokerDeviceId') || ''; } catch(e){}
+    if (!id){
+      id = 'd' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+      try { localStorage.setItem('pokerDeviceId', id); } catch(e){}
+    }
+    return id;
+  }
+
+  // 生成“全部闯关完成”的校验记录：昵称 + 完成时间 + 关卡进度 + 自由/闯关统计
+  function buildVerifyRecord(p){
+    return {
+      v: 1,
+      deviceId: getDeviceId(),
+      nickname: nickname || '未命名玩家',
+      completedAt: Date.now(),
+      totalLevels: LEVELS.length,
+      clearedIds: p.cleared.slice(),
+      free: loadFreeStats(),
+      level: p.totals,
+      perLevel: p.perLevel
+    };
+  }
+
+  // 云端提交：先存本地队列做备份，再尝试上传 Supabase；失败保留队列待下次重试。
+  function submitVerification(rec){
+    try {
+      const q = JSON.parse(localStorage.getItem(VERIFY_QUEUE_KEY) || '[]');
+      q.push(rec);
+      localStorage.setItem(VERIFY_QUEUE_KEY, JSON.stringify(q));
+    } catch(e){}
+    flushVerifyQueue();
+  }
+
+  // 把本地队列中的通关记录逐条写入 Supabase（rank_records 表），成功后从队列移除
+  async function flushVerifyQueue(){
+    if (!window.SUPABASE) return;
+    let q = [];
+    try { q = JSON.parse(localStorage.getItem(VERIFY_QUEUE_KEY) || '[]'); } catch(e){}
+    if (!q.length) return;
+    const pending = [];
+    for (const rec of q){
+      try {
+        await window.SUPABASE.insert('rank_records', [{
+          device_id: rec.deviceId,
+          nickname: rec.nickname,
+          completed_at: rec.completedAt,
+          total_levels: rec.totalLevels,
+          cleared_ids: rec.clearedIds || [],
+          free_stats: rec.free || {},
+          level_stats: rec.level || {},
+          per_level: rec.perLevel || {}
+        }]);
+      } catch(e){
+        pending.push(rec);
+      }
+    }
+    try { localStorage.setItem(VERIFY_QUEUE_KEY, JSON.stringify(pending)); } catch(e){}
+  }
+
+  // 轻量事件统计（访问 / 开始对局），写入 visit_events 表；失败静默忽略
+  function logEvent(event){
+    if (!window.SUPABASE) return;
+    try {
+      window.SUPABASE.insert('visit_events', [{device_id: getDeviceId(), event: event}]).catch(() => {});
+    } catch(e){}
+  }
+
+  // 全部关卡通关后触发（每个设备只上报一次）
+  function submitAllCleared(p){
+    if (!p || !Array.isArray(p.cleared)) return;
+    const allCleared = LEVELS.every(lv => p.cleared.indexOf(lv.id) >= 0);
+    if (!allCleared) return;
+    try { if (localStorage.getItem(VERIFY_SENT_KEY)) return; } catch(e){}
+    const rec = buildVerifyRecord(p);
+    try { localStorage.setItem(VERIFY_SENT_KEY, String(rec.completedAt)); } catch(e){}
+    submitVerification(rec);
   }
 
   // 自由模式对局结束：累计对局、胜局（玩家1并列第一也算胜）、累计得分
@@ -1511,6 +1604,9 @@
 
     if (run.cleared && p.cleared.indexOf(run.levelId) < 0) p.cleared.push(run.levelId);
     saveLevelProgress(p);
+
+    // 全部闯关完成：生成校验记录（昵称/完成时间/对局统计），供后期检验与排行榜
+    if (run.cleared) submitAllCleared(p);
 
     run.status = run.cleared ? 'done' : (run.failReason ? 'failed' : 'playing');
     if (run.cleared) showClearOverlay();
@@ -1865,6 +1961,7 @@
     game = new E.Game(seatTypes);
     game.start(botStrategies);
     uiSel = [];
+    if (!debugMode && !/[?&]auto=1/.test(location.search)) logEvent('game_start');
     lastHumanSeat = null;
     lastLogLen = 0;
     lastAwardKey = null;
@@ -1995,7 +2092,10 @@
     if (p1.length) html += playedBlock(T('playedRound1'), p1, g.p1Ranked === null && !debugMode, p1Meta(seat));
     if (p2.length) html += playedBlock(T('playedRound2'), p2, g.p2Ranked === null && !debugMode, p2Meta(seat));
     box.innerHTML = html;
-    box.classList.toggle('multi', !!p1.length && !!p2.length);
+    const multi = !!p1.length && !!p2.length;
+    box.classList.toggle('multi', multi);
+    const seatEl = $('seat' + seat);
+    if (seatEl) seatEl.classList.toggle('multi', multi);
   }
 
   /* ---------- 桌面中央出牌展示 ---------- */
@@ -2770,6 +2870,7 @@
   function render(){
     const g = game;
     if (!game) return;
+    applyTableScale();
     if (!game.gameOver &&
         (game.phase === 'p1_select' || game.phase === 'p2_choose' || game.phase === 'p2_select') &&
         game.seatTypes[game.currentSeat] === 'human'){
@@ -3297,6 +3398,8 @@
   }
 
   $('btnStart').onclick = startGameWithCheck;
+  const btnRank = $('btnRank');
+  if (btnRank) btnRank.onclick = () => { sfx.click(); window.open('排行榜.html', '_blank'); };
   $('clearBtn').onclick = () => {
     $('clearOverlay').hidden = true;
     showFinal();
@@ -3368,9 +3471,9 @@
       felt.style.removeProperty('height');
       return;
     }
-    const vh = (window.visualViewport && window.visualViewport.height)
-      ? window.visualViewport.height
-      : window.innerHeight;
+    // 取两者较小值：避免个别浏览器把工具栏区域也算进可见高度，导致桌底/手牌被操作框盖住
+    const vvH = (window.visualViewport && window.visualViewport.height) || 0;
+    const vh = vvH ? Math.min(vvH, window.innerHeight) : window.innerHeight;
     const kW = vw / 390;
     const kH = (vh - 310) / 534;
     let k = Math.min(kW, kH);
@@ -3378,6 +3481,19 @@
     felt.style.setProperty('--s', (0.5 * k).toFixed(3));
     const h = Math.min(vh - 310, Math.max(480, 534 * k));
     felt.style.height = Math.round(h) + 'px';
+    // 防遮挡兜底：主玩家座位底部若越过底部操作框顶部（Edge 等工具栏差异可能触发），
+    // 收缩桌高直到手牌完全露出，保证选牌可用
+    const dock = $('dock');
+    const seat0 = $('seat0');
+    if (dock && seat0 && !dock.hidden){
+      const dockTop = dock.getBoundingClientRect().top;
+      const seatBottom = seat0.getBoundingClientRect().bottom;
+      if (seatBottom > dockTop - 12){
+        const feltTop = felt.getBoundingClientRect().top;
+        const needed = Math.max(320, Math.round(dockTop + 6 - feltTop));
+        felt.style.height = needed + 'px';
+      }
+    }
   }
 
   let rsTimer = null;
@@ -3399,6 +3515,8 @@
   const ni = $('nickInput'); if (ni) ni.value = nickname;
   applyTableScale();
   pingLogServer();
+  if (!debugMode && !/[?&]auto=1/.test(location.search)) logEvent('visit');
+  flushVerifyQueue();
   if (/[?&]auto=1/.test(location.search)){
     seatTypes = ['ai', 'ai', 'ai'];
     buildSetup();
