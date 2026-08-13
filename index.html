@@ -1695,6 +1695,10 @@
   }
 
   function pingLogServer(){
+    // 日志服务只在本机运行：仅本地打开（file://）或 localhost 时连接，
+    // 线上 https 站点跳过，避免浏览器弹出“访问本地网络”权限提示。
+    const host = location.hostname;
+    if (location.protocol !== 'file:' && host !== 'localhost' && host !== '127.0.0.1') return;
     try {
       fetch(LOG_SERVER + '/ping').then(r => {
         if (r.ok){

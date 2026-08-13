@@ -40,6 +40,7 @@
   .head-row {
     font-size: 12px; color: #a9c2ae; border-bottom: 1px solid rgba(255,255,255,.10);
   }
+  .head-row .c-games, .head-row .c-wins, .head-row .c-score { text-align: right; }
   .row {
     border-bottom: 1px solid rgba(255,255,255,.05);
     cursor: pointer; font-size: 14px;
@@ -80,7 +81,7 @@
     <div class="title" id="title">🏆 全部通关排行榜</div>
     <div class="top-side">
       <button id="btnLang">EN</button>
-      <a class="back" id="backLink" href="博弈牌.html">← 返回游戏</a>
+      <a class="back" id="backLink" href="index.html">← 返回游戏</a>
     </div>
   </header>
 
@@ -173,6 +174,12 @@
     $('foot').textContent = T('foot');
   }
   function $(id){ return document.getElementById(id); }
+
+  // 返回游戏：线上站点入口是 index.html；本地打开时（file://）回跳到 博弈牌.html
+  (function(){
+    const back = $('backLink');
+    if (back && location.protocol === 'file:') back.href = '博弈牌.html';
+  })();
 
   async function render(){
     applyLang();
