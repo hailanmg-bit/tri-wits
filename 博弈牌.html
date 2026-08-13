@@ -526,7 +526,7 @@
   }
   /* 手机窄屏：两位对手并排在上、主玩家手牌在下、操作台固定屏幕底部 */
   @media (max-width: 620px){
-    .table-felt { --s: 0.5; height: calc(100vh - 310px); min-height: 480px; }
+    .table-felt { --s: 0.5; height: calc(100vh - 310px); height: calc(100dvh - 310px); min-height: 480px; }
     .table-rim { padding: 18px 10px; }
     .table-wrap { padding-bottom: 0; }
     .seat-tl, .seat-tr { top: 8px; width: 48%; left: 1% !important; right: auto !important; transform: none !important; }
@@ -785,6 +785,7 @@
       hardMode: '困难模式（限时出牌）',
       hardDesc: '第一回合第一阶段限 30 秒，其余每次操作限 15 秒；超时自动出最大三张/跳过，回合自动进入下一回合。',
       nickLabel: '玩家', nickSlogan: '，请输入你的昵称，开始游玩博弈牌！', nickPlaceholder: '输入昵称',
+      needNickTitle: '需要昵称', needNick: '请先输入昵称，再开始游戏。',
       timerLeft: '⏳ 剩余 {n} 秒', timeoutPlay: '⏰ 超时！已自动出牌', timeoutSkip: '⏰ 超时！已自动跳过',
       levelTitle: '🏆 闯关模式',
       levelSummary: '已通关 {c}/{t} · 累计对局 {g} · 胜局 {w} · 累计得分 {s}',
@@ -890,6 +891,7 @@
       hardMode: 'Hard Mode (timed plays)',
       hardDesc: 'Round 1 Phase 1: 30s; every other action: 15s. Timeout plays the 3 strongest cards or skips; rounds advance automatically.',
       nickLabel: 'Player', nickSlogan: ', enter your nickname and start playing Tti-Wits!', nickPlaceholder: 'Nickname',
+      needNickTitle: 'Nickname required', needNick: 'Please enter your nickname before starting.',
       timerLeft: '⏳ {n}s left', timeoutPlay: '⏰ Timeout! Auto played', timeoutSkip: '⏰ Timeout! Auto skipped',
       levelTitle: '🏆 Level Mode',
       levelSummary: 'Cleared {c}/{t} · Games {g} · Wins {w} · Total score {s}',
@@ -1386,6 +1388,12 @@
   }
 
   function startLevel(id){
+    const ni = $('nickInput');
+    if (ni) nickname = ni.value.trim();
+    if (!nickname){
+      requireNickname();
+      return;
+    }
     const cfg = LEVELS.find(x => x.id === id);
     if (!cfg) return;
     const card = $('modalCard');
@@ -1400,6 +1408,20 @@
       $('modal').hidden = true;
       levelRun = buildRun(cfg);
       levelStartGame();
+    };
+  }
+
+  // 昵称校验：未输入昵称时阻止开局，弹窗提示并引导聚焦昵称输入框
+  function requireNickname(){
+    sfx.click();
+    const card = $('modalCard');
+    card.innerHTML = '<h2>🙋 ' + T('needNickTitle') + '</h2><div class="rules-text"><p>' + T('needNick') + '</p></div>' +
+      '<div class="modal-btns"><button class="big" id="mNickOk">' + T('btnClose') + '</button></div>';
+    $('modal').hidden = false;
+    $('mNickOk').onclick = () => {
+      sfx.click();
+      $('modal').hidden = true;
+      const ni = $('nickInput'); if (ni) ni.focus();
     };
   }
 
@@ -3165,6 +3187,10 @@
 
   async function startGameWithCheck(){
     readSetup();
+    if (!nickname){
+      requireNickname();
+      return;
+    }
     const llmSeats = [0, 1, 2].filter(s => seatTypes[s] === 'llm');
     if (!llmSeats.length){ newGame(); return; }
     const btn = $('btnStart');
@@ -3331,6 +3357,8 @@
 
   // 移动端整体等比缩放：以 390×844 为设计基准，按实际视口宽高计算缩放系数，
   // 让不同尺寸的手机都呈现同一套比例布局（桌面端不介入，恢复 CSS 默认）。
+  // 高度优先取 visualViewport.height（真机去掉浏览器工具栏后的实际可见高度），
+  // 让 Safari/Edge 等不同工具栏高度下布局都贴合真实可见区域。
   function applyTableScale(){
     const felt = $('felt');
     if (!felt) return;
@@ -3340,7 +3368,9 @@
       felt.style.removeProperty('height');
       return;
     }
-    const vh = window.innerHeight;
+    const vh = (window.visualViewport && window.visualViewport.height)
+      ? window.visualViewport.height
+      : window.innerHeight;
     const kW = vw / 390;
     const kH = (vh - 310) / 534;
     let k = Math.min(kW, kH);
@@ -3351,13 +3381,18 @@
   }
 
   let rsTimer = null;
-  window.addEventListener('resize', () => {
+  const scheduleRelayout = () => {
     clearTimeout(rsTimer);
     rsTimer = setTimeout(() => {
       applyTableScale();
       if (game) render();
     }, 120);
-  });
+  };
+  window.addEventListener('resize', scheduleRelayout);
+  // 工具栏展开/收起、旋转等场景：iOS 等不一定触发 resize，但会触发 visualViewport.resize
+  if (window.visualViewport){
+    window.visualViewport.addEventListener('resize', scheduleRelayout);
+  }
 
   setStaticTexts();
   buildSetup();
