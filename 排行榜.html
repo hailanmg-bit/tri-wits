@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>博弈牌 · 全部通关排行榜</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: radial-gradient(ellipse at 50% 22%, #2f5d46 0%, #1b3d2c 55%, #0f271c 100%);
+    min-height: 100vh;
+    color: #f5f1e6;
+  }
+  #app { max-width: 860px; margin: 0 auto; padding: 18px 14px 36px; }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .title { font-size: 24px; font-weight: 800; letter-spacing: 2px; color: #ffd76e; text-shadow: 0 2px 8px rgba(0,0,0,.55); }
+  .top-side { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  button, .back {
+    font-family: inherit; cursor: pointer; border: 1px solid rgba(255,255,255,.28);
+    background: rgba(255,255,255,.13); color: #f5f1e6;
+    border-radius: 10px; padding: 7px 14px; font-size: 13px; text-decoration: none;
+  }
+  button:hover, .back:hover { filter: brightness(1.1); }
+  .summary {
+    background: rgba(0,0,0,.35); border: 1px solid rgba(255,215,110,.4); border-radius: 14px;
+    padding: 10px 16px; font-size: 14px; margin-bottom: 14px; color: #ffe9b8;
+  }
+  .summary b { color: #ffd76e; }
+  .panel {
+    background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.10);
+    border-radius: 16px; padding: 12px; margin-bottom: 14px;
+  }
+  .head-row, .row {
+    display: grid;
+    grid-template-columns: 56px 1fr 150px 64px 64px 84px;
+    gap: 8px; align-items: center;
+    padding: 9px 12px;
+  }
+  .head-row {
+    font-size: 12px; color: #a9c2ae; border-bottom: 1px solid rgba(255,255,255,.10);
+  }
+  .row {
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    cursor: pointer; font-size: 14px;
+  }
+  .row:hover { background: rgba(255,255,255,.05); }
+  .row:last-child { border-bottom: none; }
+  .row .rank { font-weight: 800; }
+  .row.top1 { background: rgba(255,215,110,.12); }
+  .row.top2 { background: rgba(200,200,210,.10); }
+  .row.top3 { background: rgba(205,127,50,.12); }
+  .medal { font-size: 18px; }
+  .nick { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .time { color: #cfe0d0; font-size: 12.5px; white-space: nowrap; }
+  .num { text-align: right; color: #f5f1e6; }
+  .detail {
+    display: none; grid-column: 1 / -1; background: rgba(0,0,0,.22); border-radius: 10px;
+    padding: 10px 14px; font-size: 12.5px; color: #d8e4da; line-height: 1.8;
+  }
+  .row.open .detail { display: block; }
+  .detail b { color: #ffd76e; }
+  .state { text-align: center; padding: 30px 0; color: #a9c2ae; font-size: 14px; }
+  .sample-note {
+    font-size: 11.5px; color: #8fa99a; text-align: center; margin-top: 4px;
+  }
+  footer { font-size: 11.5px; color: #7f9a88; text-align: center; line-height: 1.7; margin-top: 18px; }
+  @media (max-width: 560px){
+    .head-row, .row { grid-template-columns: 40px minmax(0, 1fr) auto; }
+    .row .c-games, .row .c-wins, .row .c-score { display: none; }
+    .head-row .c-games, .head-row .c-wins, .head-row .c-score { display: none; }
+    .title { font-size: 19px; }
+    .time { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="title" id="title">🏆 全部通关排行榜</div>
+    <div class="top-side">
+      <button id="btnLang">EN</button>
+      <a class="back" id="backLink" href="博弈牌.html">← 返回游戏</a>
+    </div>
+  </header>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="panel">
+    <div class="state" id="loading">加载中…</div>
+    <div id="board" hidden>
+      <div class="head-row">
+        <span>#</span><span id="hNick">昵称</span><span id="hTime">完成时间</span>
+        <span class="c-games" id="hGames">对局</span><span class="c-wins" id="hWins">胜局</span><span class="c-score" id="hScore">得分</span>
+      </div>
+      <div id="rows"></div>
+    </div>
+    <div class="state" id="empty" hidden>还没有人完成全部闯关，快来当第一个！</div>
+  </div>
+  <footer id="foot">数据由玩家客户端自动上报，仅供活动参考；排名按完成时间先后排序。</footer>
+</div>
+
+<script src="supabase-config.js"></script>
+<script>
+  const I18N = {
+    zh: {
+      title: '🏆 全部通关排行榜', back: '← 返回游戏',
+      summary: '已有 <b>{n}</b> 人完成全部 <b>{t}</b> 关，按完成时间先后排序',
+      hNick: '昵称', hTime: '完成时间', hGames: '对局', hWins: '胜局', hScore: '得分',
+      empty: '还没有人完成全部闯关，快来当第一个！',
+      foot: '数据由玩家客户端自动上报，仅供活动参考；排名按完成时间先后排序。',
+      loading: '加载中…', loadErr: '排行榜加载失败，请稍后刷新重试。',
+      detFree: '自由模式：对局 {g} · 胜局 {w} · 得分 {s}',
+      detLevel: '闯关模式：对局 {g} · 胜局 {w} · 得分 {s} · 基础分局 {b}',
+      detCleared: '通关关卡：{n} / {t}'
+    },
+    en: {
+      title: '🏆 All-Levels Leaderboard', back: '← Back to Game',
+      summary: '<b>{n}</b> player(s) cleared all <b>{t}</b> levels, ranked by finish time',
+      hNick: 'Nickname', hTime: 'Finished', hGames: 'Games', hWins: 'Wins', hScore: 'Score',
+      empty: 'No one has cleared all levels yet. Be the first!',
+      foot: 'Data is auto-reported from players\' browsers, for activity reference only; ranked by finish time.',
+      loading: 'Loading…', loadErr: 'Failed to load the leaderboard. Please refresh and try again.',
+      detFree: 'Free mode: games {g} · wins {w} · score {s}',
+      detLevel: 'Level mode: games {g} · wins {w} · score {s} · base games {b}',
+      detCleared: 'Levels cleared: {n} / {t}'
+    }
+  };
+
+  let lang = 'zh';
+  try { lang = (localStorage.getItem('pokerLang') === 'en') ? 'en' : 'zh'; } catch(e){}
+  const T = k => (I18N[lang] || I18N.zh)[k] || k;
+
+  /* ================= 数据源（Supabase） =================
+     读取 rank_records 表，按完成时间先后排序；
+     表结构与 RLS 权限见发布说明中的 SQL。 */
+  async function loadLeaderboard(){
+    const rows = await window.SUPABASE.selectRows('rank_records', {
+      select: 'nickname,completed_at,total_levels,free_stats,level_stats',
+      order: 'completed_at.asc',
+      limit: 200
+    });
+    return (rows || []).map(r => ({
+      nickname: r.nickname,
+      completedAt: r.completed_at,
+      totalLevels: r.total_levels || 30,
+      free: r.free_stats || {games: 0, wins: 0, totalScore: 0},
+      level: r.level_stats || {games: 0, wins: 0, totalScore: 0, baseGames: 0}
+    }));
+  }
+
+  function fmtTime(ts){
+    const d = new Date(ts);
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+      ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function applyLang(){
+    document.title = T('title');
+    $('title').textContent = T('title');
+    $('backLink').textContent = T('back');
+    $('btnLang').textContent = lang === 'zh' ? 'EN' : '中文';
+    $('hNick').textContent = T('hNick'); $('hTime').textContent = T('hTime');
+    $('hGames').textContent = T('hGames'); $('hWins').textContent = T('hWins'); $('hScore').textContent = T('hScore');
+    $('empty').textContent = T('empty');
+    $('foot').textContent = T('foot');
+  }
+  function $(id){ return document.getElementById(id); }
+
+  async function render(){
+    applyLang();
+    $('loading').hidden = false;
+    $('board').hidden = true;
+    $('empty').hidden = true;
+    try {
+      const list = await loadLeaderboard();
+      $('loading').hidden = true;
+      if (!list || !list.length){
+        $('empty').hidden = false;
+        $('summary').innerHTML = T('summary').replace('{n}', 0).replace('{t}', 30);
+        return;
+      }
+      const sorted = list.slice().sort((a, b) =>
+        (a.completedAt - b.completedAt) || String(a.nickname || '').localeCompare(String(b.nickname || '')));
+      $('summary').innerHTML = T('summary').replace('{n}', sorted.length).replace('{t}', sorted[0].totalLevels || 30);
+      const rows = $('rows');
+      rows.innerHTML = '';
+      sorted.forEach((r, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+        const free = r.free || {games: 0, wins: 0, totalScore: 0};
+        const level = r.level || {games: 0, wins: 0, totalScore: 0, baseGames: 0};
+        const row = document.createElement('div');
+        row.className = 'row' + (i < 3 ? ' top' + (i + 1) : '');
+        row.innerHTML =
+          '<span class="rank">' + (medal ? '<span class="medal">' + medal + '</span>' : i + 1) + '</span>' +
+          '<span class="nick">' + esc(r.nickname || '-') + '</span>' +
+          '<span class="time">' + fmtTime(r.completedAt) + '</span>' +
+          '<span class="num c-games">' + (free.games + level.games) + '</span>' +
+          '<span class="num c-wins">' + (free.wins + level.wins) + '</span>' +
+          '<span class="num c-score">' + (free.totalScore + level.totalScore) + '</span>' +
+          '<div class="detail">' +
+            T('detFree').replace('{g}', free.games).replace('{w}', free.wins).replace('{s}', free.totalScore) + '<br>' +
+            T('detLevel').replace('{g}', level.games).replace('{w}', level.wins).replace('{s}', level.totalScore).replace('{b}', level.baseGames) +
+          '</div>';
+        row.onclick = () => row.classList.toggle('open');
+        rows.appendChild(row);
+      });
+      $('board').hidden = false;
+    } catch(e){
+      $('loading').textContent = T('loadErr');
+      $('loading').hidden = false;
+    }
+  }
+
+  $('btnLang').onclick = () => {
+    lang = lang === 'zh' ? 'en' : 'zh';
+    try { localStorage.setItem('pokerLang', lang); } catch(e){}
+    render();
+  };
+  try {
+    if (window.SUPABASE){
+      window.SUPABASE.insert('visit_events', [{device_id: (localStorage.getItem('pokerDeviceId') || 'anon'), event: 'visit'}]).catch(() => {});
+    }
+  } catch(e){}
+  render();
+</script>
+</body>
+</html>
