@@ -1,0 +1,95 @@
+import { useEffect, useState } from 'preact/hooks';
+import { LevelConfig, LevelRun, levelById, nextGame, playerWon, recordGame, startRun } from '../game/levels';
+import { Match } from './match';
+import { addStats, store } from './store';
+import { t } from './i18n';
+import { useStore } from './hooks';
+import { TableScreen } from '../ui/Table';
+import { Home, LevelList, QuickSetup, Results, Settings, goalText } from '../ui/screens';
+
+type View = 'home' | 'quick' | 'levels' | 'settings' | 'game';
+
+interface Session {
+  id: number;
+  match: Match;
+  quick?: { opps: [string, string]; timed: boolean };
+  level?: { cfg: LevelConfig; run: LevelRun };
+  results: boolean;
+}
+
+/** 开发者选项：网址带 ?dev=1 时显示（对手顺序切换、解锁全部关卡） */
+const DEV = /[?&]dev=1/.test(location.search);
+let nextId = 1;
+
+export function App() {
+  const d = useStore();
+  const [view, setView] = useState<View>('home');
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => () => session?.match.dispose(), [session?.match]);
+
+  const begin = (s: Omit<Session, 'id' | 'match' | 'results'>) => {
+    session?.match.dispose();
+    const bots = s.level ? s.level.run.games[s.level.run.idx] : s.quick!.opps;
+    const timed = s.level ? s.level.cfg.hard : s.quick!.timed;
+    setSession({ ...s, id: nextId++, match: new Match({ bots, timed }), results: false });
+    setView('game');
+  };
+
+  const playLevel = (cfg: LevelConfig) => begin({ level: { cfg, run: startRun(cfg, Math.random) } });
+
+  /** 对局结束：记录战绩与闯关进度（每局只记一次），然后显示结算 */
+  const showResults = () => {
+    if (!session || session.results) return;
+    const g = session.match.game;
+    if (!g.gameOver) return;
+    const won = playerWon(g), score = g.finalScores![0], base = g.base[0] > 0;
+    let level = session.level;
+    if (level) {
+      const run = recordGame(level.cfg, level.run, g);
+      level = { ...level, run };
+      const id = level.cfg.id;
+      store.update(s => ({
+        ...s,
+        stats: { ...s.stats, level: addStats(s.stats.level, score, won, base) },
+        cleared: run.status === 'cleared' && !s.cleared[s.levelOrder].includes(id)
+          ? { ...s.cleared, [s.levelOrder]: [...s.cleared[s.levelOrder], id] }
+          : s.cleared
+      }));
+    } else {
+      store.update(s => ({ ...s, stats: { ...s.stats, quick: addStats(s.stats.quick, score, won, base) } }));
+    }
+    setSession({ ...session, level, results: true });
+  };
+
+  if (DEV) (window as unknown as { __tw?: Session | null }).__tw = session;
+
+  const quit = () => { session?.match.dispose(); setSession(null); setView('home'); };
+
+  if (view === 'game' && session) {
+    const lv = session.level;
+    const banner = lv ? `${t('lv_name', { n: lv.cfg.id })} · ${t('lv_game', { x: lv.run.idx + 1, y: lv.cfg.games })} · ${goalText(lv.cfg)}` : undefined;
+    return (
+      <>
+        <TableScreen key={session.id} match={session.match} banner={banner} onQuit={quit} onResults={showResults} />
+        {session.results && (
+          <Results
+            match={session.match}
+            level={lv ?? null}
+            onAgain={() => begin({ quick: session.quick })}
+            onHome={quit}
+            onLevels={() => { session.match.dispose(); setSession(null); setView('levels'); }}
+            onNextGame={() => lv && begin({ level: { cfg: lv.cfg, run: nextGame(lv.run) } })}
+            onRetry={() => lv && playLevel(lv.cfg)}
+            onNextLevel={() => { const next = lv && levelById(lv.cfg.id + 1, d.levelOrder); if (next) playLevel(next); }}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (view === 'quick') return <QuickSetup onBack={() => setView('home')} onStart={(opps, timed) => begin({ quick: { opps, timed } })} />;
+  if (view === 'levels') return <LevelList onBack={() => setView('home')} onPlay={playLevel} />;
+  if (view === 'settings') return <Settings onBack={() => setView('home')} dev={DEV} />;
+  return <Home go={setView} />;
+}

@@ -1,0 +1,259 @@
+/* 文案：英文为主，中文为第二语言。新增文案时两种语言必须同时补齐（类型检查会强制）。 */
+import type { HandType } from '../engine';
+
+const en = {
+  appName: 'TriWits',
+  tagline: '3 players · 3 cards · read the table',
+  quickMatch: 'Quick match',
+  quickMatchSub: 'You vs two bots',
+  levels: 'Levels',
+  levelsSub: '{c} / {t} cleared',
+  settings: 'Settings',
+  back: 'Back',
+  close: 'Close',
+  start: 'Start',
+  menu: 'Menu',
+  rules: 'Rules',
+  you: 'You',
+
+  opponents: 'Opponents',
+  random: 'Random',
+  timedMode: 'Timed mode',
+  timedModeSub: '30 s for your first play, 15 s after that',
+
+  roundLine: 'Round {n} · {phase}',
+  phase1: 'Phase 1',
+  phase2: 'Phase 2',
+  phaseResult: 'Round over',
+  sub_p1: 'Everyone plays 3 face-down',
+  sub_p2choose: 'Join phase 2? {type} required',
+  sub_p2select: 'Play a {type}',
+  sub_roundEnd: 'Round {n} settled',
+  sub_gameOver: 'Game over',
+
+  prompt_pick: 'Pick 3 cards to play face-down',
+  prompt_pickP2: 'Pick 3 cards · {type} required',
+  prompt_wait: 'Waiting for the others…',
+  prompt_join: 'Join phase 2?',
+  prompt_out: 'You are out of cards',
+  hint_selected: '{n} / 3 selected',
+  hint_invalid: 'Not a {req} — this play will be invalid',
+
+  cards: '{n} cards',
+  pile: 'Pile {n}',
+  pool: 'Pool {a} / {b}',
+  required: '{type} required',
+  st_played: 'Played',
+  st_thinking: 'Thinking…',
+  st_joined: 'Joined',
+  st_skipped: 'Skipped',
+  st_out: 'Out',
+  st_yourTurn: 'Your turn',
+  st_waiting: 'Waiting',
+
+  btn_play: 'Play 3 cards',
+  btn_reset: 'Reset',
+  btn_join: 'Join',
+  btn_skip: 'Skip',
+  btn_next: 'Next round',
+  btn_results: 'See results',
+
+  tag_win: 'Wins',
+  tag_invalid: 'Invalid',
+  tag_special: '235',
+
+  ev_won: '{name} wins {n} cards with {type}',
+  ev_allInvalid: 'All plays invalid — everyone banks their own 3',
+  ev_notOpened: 'Phase 2 not opened',
+  ev_out: '{name} is out of cards',
+  ev_timeoutPlay: 'Time’s up — played for you',
+  ev_timeoutSkip: 'Time’s up — skipped',
+
+  final: 'Final scores',
+  scoreDetail: 'Base {b} + Pile {p}',
+  playAgain: 'Play again',
+  home: 'Home',
+
+  lv_name: 'Level {n}',
+  lv_game: 'Game {x} / {y}',
+  lv_won: 'Won',
+  lv_lost: 'Lost',
+  lv_streak: '{n} wins so far',
+  lv_total: 'Total {s}',
+  lv_cleared: 'Level cleared!',
+  lv_failed: 'Level failed',
+  lv_r_loss: 'You didn’t finish first this game.',
+  lv_r_forbid: 'You won a phase with a forbidden hand type.',
+  lv_r_base: 'You can no longer earn the 5-point bonus in {n} games.',
+  lv_r_score: 'Total score {s} is below the target.',
+  lv_nextGame: 'Next game',
+  lv_retry: 'Retry',
+  lv_nextLevel: 'Next level',
+  lv_list: 'All levels',
+  lv_goal: 'Goal',
+  lv_opp: 'Opponents',
+  lv_enter: 'Enter',
+  lv_locked: 'Clear the previous level to unlock',
+  lv_timed: 'Timed',
+  goal_win: 'Win a game',
+  goal_streak: 'Win {n} games in a row',
+  goal_minBase: ', earning the first-out bonus in at least {m}',
+  goal_forbid1: ', never winning a phase with High Card (incl. 235)',
+  goal_forbid6: ', never winning a phase with Trips',
+  goal_score: 'Score {t}+ over {n} games',
+  opp_shuffle: 'Random pairs from: {names}',
+  opp_anchor: '{anchor} + a different partner each game',
+
+  set_language: 'Language',
+  set_dev: 'Developer',
+  set_order: 'Level opponent order',
+  set_order_original: 'Original',
+  set_order_simulated: 'By bot strength',
+  set_unlockAll: 'Unlock all levels',
+  timer: '{n}s',
+
+  type_1: 'High Card', type_2: 'Pair', type_3: 'Straight', type_4: 'Flush', type_5: 'Straight Flush', type_6: 'Trips',
+
+  bot_1_1: 'Kai', bot_2_1: 'Zhou', bot_2_2: 'Hao', bot_3_1: 'Zhuang', bot_ai_1: 'Dr. Su', bot_ai_2: 'Frost'
+};
+
+type Dict = typeof en;
+
+const zh: Dict = {
+  appName: 'TriWits 博弈牌',
+  tagline: '三人 · 三张 · 斗智',
+  quickMatch: '快速对局',
+  quickMatchSub: '你和两位电脑',
+  levels: '闯关',
+  levelsSub: '已通关 {c} / {t}',
+  settings: '设置',
+  back: '返回',
+  close: '关闭',
+  start: '开始',
+  menu: '菜单',
+  rules: '规则',
+  you: '你',
+
+  opponents: '对手',
+  random: '随机',
+  timedMode: '限时模式',
+  timedModeSub: '第一手 30 秒，之后每次 15 秒',
+
+  roundLine: '第 {n} 回合 · {phase}',
+  phase1: '第一阶段',
+  phase2: '第二阶段',
+  phaseResult: '回合结算',
+  sub_p1: '各家盖牌出 3 张',
+  sub_p2choose: '是否参与第二阶段？需出{type}',
+  sub_p2select: '需出{type}',
+  sub_roundEnd: '第 {n} 回合结束',
+  sub_gameOver: '对局结束',
+
+  prompt_pick: '选 3 张牌盖牌打出',
+  prompt_pickP2: '选 3 张牌 · 需出{type}',
+  prompt_wait: '等待其他玩家…',
+  prompt_join: '参与第二阶段？',
+  prompt_out: '你的手牌已打空',
+  hint_selected: '已选 {n} / 3',
+  hint_invalid: '不是{req}，这手牌会被判无效',
+
+  cards: '{n} 张',
+  pile: '牌堆 {n}',
+  pool: '牌池 {a} / {b}',
+  required: '需出{type}',
+  st_played: '已出牌',
+  st_thinking: '思考中…',
+  st_joined: '参与',
+  st_skipped: '跳过',
+  st_out: '已打空',
+  st_yourTurn: '轮到你',
+  st_waiting: '等待中',
+
+  btn_play: '出这 3 张',
+  btn_reset: '重选',
+  btn_join: '参与',
+  btn_skip: '跳过',
+  btn_next: '下一回合',
+  btn_results: '查看结算',
+
+  tag_win: '胜',
+  tag_invalid: '无效',
+  tag_special: '235',
+
+  ev_won: '{name} 以{type}赢得 {n} 张',
+  ev_allInvalid: '全部无效，各家出的 3 张计入自己的牌堆',
+  ev_notOpened: '第二阶段未开启',
+  ev_out: '{name} 手牌打空',
+  ev_timeoutPlay: '超时，已自动出牌',
+  ev_timeoutSkip: '超时，已自动跳过',
+
+  final: '最终得分',
+  scoreDetail: '基础分 {b} + 牌堆 {p}',
+  playAgain: '再来一局',
+  home: '首页',
+
+  lv_name: '第 {n} 关',
+  lv_game: '第 {x} / {y} 局',
+  lv_won: '胜',
+  lv_lost: '负',
+  lv_streak: '已连胜 {n} 局',
+  lv_total: '累计 {s} 分',
+  lv_cleared: '通关！',
+  lv_failed: '闯关失败',
+  lv_r_loss: '本局没有拿到第一。',
+  lv_r_forbid: '你用了禁止的牌型赢得阶段。',
+  lv_r_base: '剩余局数已无法凑够 {n} 局基础分。',
+  lv_r_score: '累计 {s} 分，未达到目标。',
+  lv_nextGame: '下一局',
+  lv_retry: '重新挑战',
+  lv_nextLevel: '下一关',
+  lv_list: '关卡列表',
+  lv_goal: '目标',
+  lv_opp: '对手',
+  lv_enter: '进入',
+  lv_locked: '通过上一关后解锁',
+  lv_timed: '限时',
+  goal_win: '赢一局',
+  goal_streak: '连赢 {n} 局',
+  goal_minBase: '，且至少 {m} 局拿到基础分',
+  goal_forbid1: '，且不能以单张（含 235）赢得任何阶段',
+  goal_forbid6: '，且不能以三条赢得任何阶段',
+  goal_score: '{n} 局累计 {t} 分以上',
+  opp_shuffle: '从 {names} 中随机两两组合',
+  opp_anchor: '{anchor} 固定出场，每局搭配不同对手',
+
+  set_language: '语言',
+  set_dev: '开发者',
+  set_order: '闯关对手顺序',
+  set_order_original: '原版',
+  set_order_simulated: '按电脑强弱',
+  set_unlockAll: '解锁全部关卡',
+  timer: '{n} 秒',
+
+  type_1: '单张', type_2: '对子', type_3: '顺子', type_4: '同花', type_5: '同花顺', type_6: '三条',
+
+  bot_1_1: '阿凯', bot_2_1: '老周', bot_2_2: '小豪', bot_3_1: '大壮', bot_ai_1: '苏博士', bot_ai_2: '冷锋'
+};
+
+export type Lang = 'en' | 'zh';
+export type Key = keyof Dict;
+const DICTS: Record<Lang, Dict> = { en, zh };
+
+let current: Lang = 'en';
+export function setLang(l: Lang) { current = l; document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en'; }
+export function getLang(): Lang { return current; }
+
+export function t(key: Key, params?: Record<string, string | number>): string {
+  let s: string = DICTS[current][key];
+  if (params) for (const k of Object.keys(params)) s = s.split('{' + k + '}').join(String(params[k]));
+  return s;
+}
+
+export const typeName = (tp: HandType | null | undefined) => (tp ? t(('type_' + tp) as Key) : '');
+export const botName = (key: string | null | undefined) => (key ? t(('bot_' + key.replace('-', '_')) as Key) : '');
+
+/** 系统语言为中文时默认中文，否则英文 */
+export function detectLang(): Lang {
+  const l = (navigator.language || '').toLowerCase();
+  return l.startsWith('zh') ? 'zh' : 'en';
+}

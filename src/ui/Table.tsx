@@ -1,0 +1,342 @@
+/* 牌桌：竖屏与横屏是两套网格布局，共用同一批组件 */
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import { Card, GameEvent, RankedEntry, Seat, compareCards, evalHand3 } from '../engine';
+import { Match } from '../app/match';
+import { useCountdown, useLandscape, useSize, useSubscribe } from '../app/hooks';
+import { botName, t, typeName } from '../app/i18n';
+import { CardView, cardLabel } from './Card';
+import { Avatar, Icon, Sheet } from './common';
+import { RulesSheet } from './Rules';
+
+interface Props {
+  match: Match;
+  /** 闯关模式时显示在顶栏下方的进度条 */
+  banner?: string;
+  onQuit(): void;
+  onResults(): void;
+}
+
+export function TableScreen({ match, banner, onQuit, onResults }: Props) {
+  useSubscribe(match);
+  const g = match.game;
+  const land = useLandscape();
+  const stage = g.round + ':' + g.phase;
+  // 选牌和阶段绑定：进入新阶段（手牌已变化）时旧的下标自动失效
+  const [picked, setPicked] = useState<{ stage: string; sel: number[] }>({ stage, sel: [] });
+  const sel = picked.stage === stage ? picked.sel : [];
+  const setSel: SetSel = v => setPicked(prev => {
+    const cur = prev.stage === stage ? prev.sel : [];
+    return { stage, sel: typeof v === 'function' ? v(cur) : v };
+  });
+  const [menu, setMenu] = useState(false);
+  const [rules, setRules] = useState(false);
+
+  const left = useCountdown(match.deadline);
+  const sameBots = g.seatStrategies[1] === g.seatStrategies[2];
+  const name = (s: Seat) => (s === 0 ? t('you') : botName(g.seatStrategies[s]) + (sameBots ? ' ' + (s === 1 ? 'A' : 'B') : ''));
+
+  const phaseLabel = g.phase === 'p1_select' ? t('phase1')
+    : g.phase === 'p2_choose' || g.phase === 'p2_select' ? t('phase2') : t('phaseResult');
+  const sub = g.phase === 'p1_select' ? t('sub_p1')
+    : g.phase === 'p2_choose' ? t('sub_p2choose', { type: typeName(g.requiredType) })
+    : g.phase === 'p2_select' ? t('sub_p2select', { type: typeName(g.requiredType) })
+    : g.phase === 'round_end' ? t('sub_roundEnd', { n: g.round + 1 }) : t('sub_gameOver');
+
+  return (
+    <div class={'table ' + (land ? 'land' : 'port')}>
+      <header class="topbar">
+        <button class="icon-btn" aria-label={t('menu')} onClick={() => setMenu(true)}><Icon name="menu" /></button>
+        <div class="topbar-title">
+          <div class="tb-main">{t('roundLine', { n: g.round + 1, phase: phaseLabel })}</div>
+          <div class="tb-sub">{sub}</div>
+        </div>
+        {left !== null
+          ? <div class={'timer' + (left <= 5 ? ' low' : '')} role="timer">{t('timer', { n: left })}</div>
+          : <button class="icon-btn" aria-label={t('rules')} onClick={() => setRules(true)}><Icon name="help" /></button>}
+      </header>
+      {banner && <div class="level-banner">{banner}</div>}
+
+      <Opponent match={match} seat={1} name={name(1)} area="opp1" />
+      <Opponent match={match} seat={2} name={name(2)} area="opp2" />
+      <Center match={match} name={name} land={land} />
+      <MeRow match={match} sel={sel} />
+      <Hand match={match} sel={sel} setSel={setSel} land={land} />
+      <Actions match={match} sel={sel} setSel={setSel} onResults={onResults} />
+
+      {menu && (
+        <Sheet onClose={() => setMenu(false)}>
+          <button class="btn ghost wide" onClick={() => { setMenu(false); setRules(true); }}>{t('rules')}</button>
+          <button class="btn ghost wide" onClick={onQuit}>{t('home')}</button>
+          <button class="btn primary wide" onClick={() => setMenu(false)}>{t('close')}</button>
+        </Sheet>
+      )}
+      {rules && <RulesSheet onClose={() => setRules(false)} />}
+    </div>
+  );
+}
+
+/* ---------- 状态 ---------- */
+
+type Status = 'played' | 'thinking' | 'joined' | 'skipped' | 'out' | 'yourTurn' | 'waiting' | '';
+
+function statusOf(match: Match, seat: Seat): Status {
+  const g = match.game;
+  const inPending = g.pending.includes(seat);
+  if (g.phase === 'p1_select') {
+    if (!inPending) return 'out';
+    if (g.p1Locked[seat]) return 'played';
+    return seat === 0 ? 'yourTurn' : 'thinking';
+  }
+  if (g.phase === 'p2_choose') {
+    if (!inPending) return 'out';
+    // 真人做决定前不透露电脑是否参与
+    if (seat !== 0 && match.needs(0)) return 'thinking';
+    if (g.p2Decided[seat]) return g.p2Joins[seat] ? 'joined' : 'skipped';
+    return seat === 0 ? 'yourTurn' : 'thinking';
+  }
+  if (g.phase === 'p2_select') {
+    if (!inPending) return g.hands[seat].length ? 'skipped' : 'out';
+    if (g.p2Locked[seat]) return 'played';
+    return seat === 0 ? 'yourTurn' : 'thinking';
+  }
+  return g.hands[seat].length ? '' : 'out';
+}
+
+const STATUS_KEY = {
+  played: 'st_played', thinking: 'st_thinking', joined: 'st_joined', skipped: 'st_skipped',
+  out: 'st_out', yourTurn: 'st_yourTurn', waiting: 'st_waiting'
+} as const;
+
+function StatusPill({ s }: { s: Status }) {
+  if (!s) return null;
+  return <span class={'pill status-' + s}>{t(STATUS_KEY[s])}</span>;
+}
+
+/** 当前选牌阶段已锁定、但还没结算的出牌 */
+function lockedPlay(match: Match, seat: Seat): Card[] | null {
+  const g = match.game;
+  if (g.phase === 'p1_select' && g.p1Locked[seat]) return g.playedP1[seat];
+  if (g.phase === 'p2_select' && g.p2Locked[seat]) return g.playedP2[seat];
+  return null;
+}
+
+/* ---------- 对手 ---------- */
+
+function Opponent({ match, seat, name, area }: { match: Match; seat: Seat; name: string; area: string }) {
+  const g = match.game;
+  const locked = lockedPlay(match, seat);
+  const waiting = !locked && (g.phase === 'p1_select' || g.phase === 'p2_select') && match.needs(seat);
+  return (
+    <section class={'opp ' + area} aria-label={name}>
+      <div class="opp-head">
+        <Avatar strategy={g.seatStrategies[seat]} name={name} size={44} />
+        <div class="opp-meta">
+          <div class="opp-name">{name}</div>
+          <div class="muted">{t('cards', { n: g.hands[seat].length - (locked ? 3 : 0) })} · {t('pile', { n: g.piles[seat] })}</div>
+        </div>
+      </div>
+      <div class="opp-play">
+        <div class="mini-stack">
+          {locked && [0, 1, 2].map(i => <CardView key={i} width={34} faceDown style={{ left: i * 16 + 'px' }} />)}
+          {waiting && <div class="slot-dashed" />}
+        </div>
+        <StatusPill s={statusOf(match, seat)} />
+      </div>
+    </section>
+  );
+}
+
+/* ---------- 中央：牌池 / 亮牌结果 / 事件 ---------- */
+
+function eventText(e: GameEvent, name: (s: Seat) => string): string | null {
+  switch (e.t) {
+    case 'p1Won': case 'p2Won': return t('ev_won', { name: name(e.seat), n: e.n, type: typeName(e.type) });
+    case 'p2AllInvalid': return t('ev_allInvalid');
+    case 'p2NotEnough': return t('ev_notOpened');
+    case 'emptied': return t('ev_out', { name: name(e.seat) });
+    default: return null;
+  }
+}
+
+function Center({ match, name, land }: { match: Match; name: (s: Seat) => string; land: boolean }) {
+  const g = match.game;
+  const selecting = g.phase === 'p1_select' || g.phase === 'p2_select';
+  const resolved = { p1: g.p1Ranked, p2: g.p2Ranked };
+  const [tab, setTab] = useState<'p1' | 'p2'>('p1');
+  useEffect(() => setTab(g.p2Ranked ? 'p2' : 'p1'), [g.round, !!g.p2Ranked]);
+
+  // 本回合最近一条值得提示的事件
+  const msg = useMemo(() => {
+    for (let i = g.log.length - 1; i >= 0; i--) {
+      const e = g.log[i];
+      if (e.round !== g.round) break;
+      const s = eventText(e, name);
+      if (s) return s;
+    }
+    return null;
+  }, [match.version]);
+
+  const timeoutMsg = match.timeout === 'play' ? t('ev_timeoutPlay') : match.timeout === 'skip' ? t('ev_timeoutSkip') : null;
+
+  return (
+    <section class="center">
+      <div class="felt-ring" aria-hidden="true" />
+      {selecting ? (
+        <div class="pool">
+          <div class="pool-stack">
+            {Array.from({ length: Math.min(3, lockedCount(match)) }, (_, i) => (
+              <CardView key={i} width={42} faceDown style={{ left: 6 + i * 12 + 'px', transform: `rotate(${(i - 1) * 8}deg)` }} />
+            ))}
+          </div>
+          <div class="chip dark">{t('pool', { a: lockedCount(match) * 3, b: g.pending.length * 3 })}</div>
+          {g.phase === 'p2_select' && <div class="chip outline">{t('required', { type: typeName(g.requiredType) })}</div>}
+        </div>
+      ) : (
+        <div class="showdown">
+          {resolved.p1 && resolved.p2 && (
+            <div class="tabs" role="tablist">
+              <button role="tab" aria-selected={tab === 'p1'} class={tab === 'p1' ? 'on' : ''} onClick={() => setTab('p1')}>{t('phase1')}</button>
+              <button role="tab" aria-selected={tab === 'p2'} class={tab === 'p2' ? 'on' : ''} onClick={() => setTab('p2')}>{t('phase2')}</button>
+            </div>
+          )}
+          {resolved[tab] && <Showdown ranked={resolved[tab]!} phase={tab} match={match} name={name} cardW={land ? 24 : 30} />}
+        </div>
+      )}
+      {(timeoutMsg || msg) && <div class="center-msg" aria-live="polite">{timeoutMsg || msg}</div>}
+    </section>
+  );
+}
+
+function lockedCount(match: Match): number {
+  const g = match.game;
+  const locks = g.phase === 'p1_select' ? g.p1Locked : g.p2Locked;
+  return g.pending.filter(s => locks[s]).length;
+}
+
+function Showdown({ ranked, phase, match, name, cardW }: { ranked: RankedEntry[]; phase: 'p1' | 'p2'; match: Match; name: (s: Seat) => string; cardW: number }) {
+  const g = match.game;
+  const winner = phase === 'p1' ? g.p1Winner : g.p2Winner;
+  return (
+    <ol class="sd-list">
+      {ranked.map(e => {
+        const cards = ((phase === 'p1' ? g.playedP1 : g.playedP2)[e.seat] || []).slice().sort(compareCards);
+        return (
+          <li key={e.seat} class={'sd-row' + (e.seat === winner ? ' win' : '') + (e.ev.invalid ? ' invalid' : '')}>
+            <span class="sd-name">{name(e.seat)}</span>
+            <span class="sd-cards" aria-label={cards.map(cardLabel).join(', ')}>
+              {cards.map((c, i) => <CardView key={i} card={c} width={cardW} />)}
+            </span>
+            <span class="sd-type">{typeName(e.ev.type)}{e.ev.special235 ? ' · 235' : ''}</span>
+            {e.seat === winner && <span class="pill win">{t('tag_win')}</span>}
+            {e.ev.invalid && <span class="pill bad">{t('tag_invalid')}</span>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/* ---------- 自己 ---------- */
+
+function MeRow({ match, sel }: { match: Match; sel: number[] }) {
+  const g = match.game;
+  const locked = lockedPlay(match, 0);
+  let chip: { text: string; bad: boolean } | null = null;
+  if (sel.length === 3) {
+    const ev = evalHand3(sel.map(i => g.hands[0][i]));
+    const bad = g.phase === 'p2_select' && ev.type !== g.requiredType;
+    chip = { text: typeName(ev.type) + (ev.special235 ? ' · 235' : ''), bad };
+  }
+  return (
+    <section class="me">
+      <div class="me-left">
+        <Avatar strategy={null} name={t('you')} size={36} me />
+        <span class="me-name">{t('you')}</span>
+        <span class="muted">{t('cards', { n: g.hands[0].length - (locked ? 3 : 0) })} · {t('pile', { n: g.piles[0] })}</span>
+        {g.base[0] > 0 && <span class="pill win">+5</span>}
+      </div>
+      {chip && <span class={'chip ' + (chip.bad ? 'bad' : 'light')}>{chip.text}</span>}
+    </section>
+  );
+}
+
+type SetSel = (v: number[] | ((prev: number[]) => number[])) => void;
+
+/** 竖屏手牌超过 12 张时分两排，避免点数被压住 */
+function Hand({ match, sel, setSel, land }: { match: Match; sel: number[]; setSel: SetSel; land: boolean }) {
+  const g = match.game;
+  const [ref, size] = useSize<HTMLDivElement>();
+  const locked = lockedPlay(match, 0);
+  const canPick = (g.phase === 'p1_select' || g.phase === 'p2_select') && match.needs(0);
+  const list = g.hands[0].map((c, i) => ({ c, i })).filter(x => !locked || !locked.includes(x.c)).sort((a, b) => compareCards(a.c, b.c));
+
+  const W = size.w || 360;
+  const n = list.length;
+  const rows = !land && n > 12 ? 2 : 1;
+  const perRow = Math.ceil(n / rows);
+  const cardW = Math.round(land ? Math.max(46, Math.min(76, window.innerHeight * 0.18)) : Math.max(56, Math.min(80, W * 0.18)));
+  const cardH = Math.round(cardW * 1.4375);
+  const step = perRow > 1 ? Math.min(cardW * 0.62, (W - cardW) / (perRow - 1)) : 0;
+  const lift = Math.round(cardW * 0.22);
+  const rowGap = Math.round(cardH * 0.5);
+
+  const toggle = (i: number) => {
+    if (!canPick) return;
+    setSel(prev => (prev.includes(i) ? prev.filter(x => x !== i) : prev.length < 3 ? [...prev, i] : prev));
+  };
+
+  return (
+    <section class="hand" ref={ref} style={{ height: cardH + lift + (rows - 1) * rowGap + 'px' }}>
+      {list.map(({ c, i }, k) => {
+        const on = sel.includes(i);
+        const r = Math.floor(k / perRow), col = k % perRow;
+        const inRow = Math.min(perRow, n - r * perRow);
+        const off = Math.max(0, (W - (cardW + step * (inRow - 1))) / 2);
+        return (
+          <button
+            key={i}
+            class="hand-card"
+            aria-pressed={on}
+            aria-label={cardLabel(c)}
+            disabled={!canPick}
+            onClick={() => toggle(i)}
+            style={{ left: off + col * step + 'px', top: r * rowGap + (on ? 0 : lift) + 'px', zIndex: k }}
+          >
+            <CardView card={c} width={cardW} selected={on} />
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+function Actions({ match, sel, setSel, onResults }: { match: Match; sel: number[]; setSel: SetSel; onResults(): void }) {
+  const g = match.game;
+  let body;
+  if (g.phase === 'game_over') {
+    body = <button class="btn primary grow" data-act="results" onClick={onResults}>{t('btn_results')}</button>;
+  } else if (g.phase === 'round_end') {
+    const ending = g.holders().length <= 1;
+    body = ending
+      ? <button class="btn primary grow" data-act="results" onClick={() => { match.nextRound(); onResults(); }}>{t('btn_results')}</button>
+      : <button class="btn primary grow" data-act="next" onClick={() => match.nextRound()}>{t('btn_next')}</button>;
+  } else if (g.phase === 'p2_choose' && match.needs(0)) {
+    body = <>
+      <button class="btn ghost" data-act="skip" onClick={() => match.chooseJoin(false)}>{t('btn_skip')}</button>
+      <button class="btn primary grow" data-act="join" onClick={() => match.chooseJoin(true)}>{t('btn_join')}</button>
+    </>;
+  } else if ((g.phase === 'p1_select' || g.phase === 'p2_select') && match.needs(0)) {
+    const invalid = sel.length === 3 && g.phase === 'p2_select' &&
+      evalHand3(sel.map(i => g.hands[0][i])).type !== g.requiredType;
+    body = <>
+      <button class="btn ghost" onClick={() => setSel([])} disabled={!sel.length}>{t('btn_reset')}</button>
+      <button class="btn primary grow" data-act="play" disabled={sel.length !== 3} onClick={() => match.playCards(sel)}>
+        {sel.length === 3 ? t('btn_play') : t('hint_selected', { n: sel.length })}
+      </button>
+      {invalid && <div class="action-warn" role="status">{t('hint_invalid', { req: typeName(g.requiredType) })}</div>}
+    </>;
+  } else {
+    body = <div class="action-wait">{g.hands[0].length ? t('prompt_wait') : t('prompt_out')}</div>;
+  }
+  return <section class="actions">{body}</section>;
+}
