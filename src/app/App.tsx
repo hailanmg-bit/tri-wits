@@ -7,10 +7,11 @@ import { useStore } from './hooks';
 import { TableScreen } from '../ui/Table';
 import { sfx } from './sound';
 import { exitApp } from './native';
+import { AVATARS, AvatarArt } from '../ui/avatars';
 import { TUTORIAL_BOTS, Tutorial, tutorialHands, tutorialScript } from './tutorial';
-import { Home, LevelList, QuickSetup, Results, Settings, goalText } from '../ui/screens';
+import { Home, LevelList, ProfileSetup, QuickSetup, Results, Settings, goalText } from '../ui/screens';
 
-type View = 'home' | 'quick' | 'levels' | 'settings' | 'game' | 'tutorial';
+type View = 'home' | 'quick' | 'levels' | 'settings' | 'game' | 'tutorial' | 'profile';
 
 interface Session {
   id: number;
@@ -26,7 +27,18 @@ const DEV = /[?&]dev=1/.test(location.search);
 if (DEV) (window as unknown as { __sfx?: typeof sfx }).__sfx = sfx;
 let nextId = 1;
 
+/** 开发用：?dev=1&avatars=1 显示整个头像库 */
+function AvatarGallery() {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', padding: '20px', background: '#0F3D35', minHeight: '100vh', alignContent: 'flex-start' }}>
+      {AVATARS.map(a => <div key={a.id} style={{ textAlign: 'center', fontSize: '11px', color: '#C9CCD3' }}><AvatarArt id={a.id} size={96} /><div>{a.id}</div></div>)}
+      <div style={{ width: '100%', display: 'flex', gap: '10px', alignItems: 'center' }}>{AVATARS.map(a => <AvatarArt key={a.id} id={a.id} size={36} />)}</div>
+    </div>
+  );
+}
+
 export function App() {
+  if (DEV && /[?&]avatars=1/.test(location.search)) return <AvatarGallery />;
   const d = useStore();
   const [view, setView] = useState<View>('home');
   const [session, setSession] = useState<Session | null>(null);
@@ -119,6 +131,9 @@ export function App() {
 
   if (view === 'quick') return <QuickSetup onBack={() => setView('home')} onStart={(opps, timed) => begin({ quick: { opps, timed } })} />;
   if (view === 'levels') return <LevelList onBack={() => setView('home')} onPlay={playLevel} />;
-  if (view === 'settings') return <Settings onBack={() => setView('home')} dev={DEV} />;
+  if (view === 'settings') return <Settings onBack={() => setView('home')} onProfile={() => setView('profile')} dev={DEV} />;
+  if (view === 'profile') return <ProfileSetup first={false} onDone={() => setView('settings')} onBack={() => setView('settings')} />;
+  // 第一次打开：先建角色
+  if (!d.profile) return <ProfileSetup first onDone={() => setView('home')} />;
   return <Home go={v => (v === 'tutorial' ? startTutorial() : setView(v))} />;
 }

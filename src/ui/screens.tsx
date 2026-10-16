@@ -5,10 +5,12 @@ import { LevelConfig, LevelRun, getLevels, isUnlocked, LEVEL_ORDERS } from '../g
 import { Match } from '../app/match';
 import { SaveData, store } from '../app/store';
 import { buzz, sfx } from '../app/sound';
-import { Key, Lang, botName, setLang, t } from '../app/i18n';
+import { Key, Lang, botName, getLang, setLang, t } from '../app/i18n';
 import { useStore } from '../app/hooks';
 import { Icon, Sheet } from './common';
 import { CardView } from './Card';
+import { AVATARS, AvatarArt, AvatarStyle, DEFAULT_AVATAR } from './avatars';
+import { Avatar } from './common';
 
 function Logo() {
   return (
@@ -175,13 +177,14 @@ export function LevelList({ onBack, onPlay }: { onBack(): void; onPlay(cfg: Leve
 
 /* ---------- 设置 ---------- */
 
-export function Settings({ onBack, dev }: { onBack(): void; dev: boolean }) {
+export function Settings({ onBack, onProfile, dev }: { onBack(): void; onProfile(): void; dev: boolean }) {
   const d = useStore();
   const set = (patch: Partial<SaveData>) => store.update(s => ({ ...s, ...patch }));
   return (
     <main class="page">
       <ScreenHead title={t('settings')} onBack={onBack} />
       <div class="page-body">
+        <ProfileRow onClick={onProfile} />
         <div class="field">
           <label for="lang">{t('set_language')}</label>
           <select id="lang" value={d.lang} onChange={e => {
@@ -195,6 +198,10 @@ export function Settings({ onBack, dev }: { onBack(): void; dev: boolean }) {
         <label class="toggle">
           <input type="checkbox" checked={d.sound} onChange={e => { set({ sound: (e.target as HTMLInputElement).checked }); sfx('button'); }} />
           <span><b>{t('set_sound')}</b></span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" checked={d.chat} onChange={e => set({ chat: (e.target as HTMLInputElement).checked })} />
+          <span><b>{t('set_chat')}</b><small>{t('set_chatSub')}</small></span>
         </label>
         <label class="toggle">
           <input type="checkbox" checked={d.haptics} onChange={e => { set({ haptics: (e.target as HTMLInputElement).checked }); buzz(20); }} />
@@ -253,7 +260,7 @@ export function Results({ match, level, tutorial, onQuick, onAgain, onHome, onNe
         <ol class="score-list">
           {order.map((s, r) => (
             <li key={s} class={(f[s] === top ? 'first ' : '') + (s === 0 ? 'me' : '')} style={{ '--r': r }}>
-              <span class="sc-name">{name(s)}</span>
+              <span class="sc-name"><Avatar strategy={g.seatStrategies[s]} avatar={s === 0 ? store.get().profile?.avatar : undefined} size={30} me={s === 0} />{name(s)}</span>
               <span class="muted">{t('scoreDetail', { b: g.base[s], p: g.piles[s] })}</span>
               <b class="sc-val">{f[s]}</b>
             </li>
@@ -299,5 +306,68 @@ export function Results({ match, level, tutorial, onQuick, onAgain, onHome, onNe
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---------- 建角色 / 编辑资料 ---------- */
+
+const NAMES_ZH = ['牌桌新秀', '三张高手', '花色控', '235 猎人', '稳健派', '冷静玩家', '幸运星', '夜猫子'];
+const NAMES_EN = ['Ace Rookie', 'Three-Card Pro', 'Suit Master', '235 Hunter', 'Steady Hand', 'Cool Player', 'Lucky Star', 'Night Owl'];
+const randomName = () => { const l = getLang() === 'zh' ? NAMES_ZH : NAMES_EN; return l[Math.floor(Math.random() * l.length)]; };
+const STYLE_ORDER: AvatarStyle[] = ['portrait', 'animal', 'pixel', 'emblem'];
+
+export function ProfileSetup({ first, onDone, onBack }: { first: boolean; onDone(): void; onBack?(): void }) {
+  const d = useStore();
+  const [avatar, setAvatar] = useState(d.profile?.avatar || DEFAULT_AVATAR);
+  const [name, setName] = useState(d.profile?.name || randomName());
+  const clean = name.trim().slice(0, 16);
+  const save = () => {
+    store.update(s => ({ ...s, profile: { name: clean || randomName(), avatar } }));
+    sfx('button');
+    onDone();
+  };
+  return (
+    <main class="page profile">
+      {first
+        ? <header class="screen-head first"><h2>{t('profile_title')}</h2></header>
+        : <ScreenHead title={t('profile_edit')} onBack={onBack!} />}
+      <div class="page-body">
+        <div class="profile-hero">
+          <AvatarArt id={avatar} size={96} />
+          <p class="muted">{t('profile_sub')}</p>
+        </div>
+        <div class="field">
+          <label for="pname">{t('profile_name')}</label>
+          <div class="name-row">
+            <input id="pname" value={name} maxLength={16} autoComplete="off" onInput={e => setName((e.target as HTMLInputElement).value)} />
+            <button class="btn ghost" onClick={() => setName(randomName())}>{t('profile_random')}</button>
+          </div>
+        </div>
+        {STYLE_ORDER.map(st => (
+          <section key={st} class="av-section">
+            <h3 class="label">{t(('style_' + st) as Key)}</h3>
+            <div class="av-grid">
+              {AVATARS.filter(a => a.style === st).map(a => (
+                <button key={a.id} class={'av-pick' + (a.id === avatar ? ' on' : '')} aria-pressed={a.id === avatar} aria-label={a.id} onClick={() => { setAvatar(a.id); sfx('select'); }}>
+                  <AvatarArt id={a.id} size={60} />
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      <div class="page-foot"><button class="btn primary wide" data-act="profile-save" onClick={save}>{first ? t('profile_go') : t('profile_save')}</button></div>
+    </main>
+  );
+}
+
+export function ProfileRow({ onClick }: { onClick(): void }) {
+  const p = useStore().profile;
+  return (
+    <button class="profile-row" onClick={onClick}>
+      <Avatar avatar={p?.avatar} size={44} me />
+      <span class="pr-text"><b>{p?.name}</b><small>{t('profile_edit')}</small></span>
+      <Icon name="edit" size={20} />
+    </button>
   );
 }

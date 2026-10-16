@@ -54,9 +54,9 @@ h1, h2, h3 { margin: 0; }
 .pill.status-thinking { color: var(--brass); }
 .pill.status-out, .pill.status-skipped { color: var(--muted); }
 .avatar {
-  border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  font-family: var(--font-display); font-weight: 700; line-height: 1; box-shadow: 0 0 0 2px var(--text);
+  border-radius: 50%; display: inline-flex; flex-shrink: 0; overflow: hidden; box-shadow: 0 0 0 2px rgba(243, 238, 226, .85);
 }
+.avatar-art { display: block; border-radius: 50%; }
 .avatar.is-me { box-shadow: 0 0 0 2px var(--brass); }
 
 /* ============ 牌面（1em = 牌宽 / 4） ============ */
@@ -334,3 +334,49 @@ h1, h2, h3 { margin: 0; }
 .btn.ghost.coach-target:not(:disabled) { border-color: var(--brass); color: var(--brass); }
 .menu-row { display: flex; gap: 14px; }
 .menu-row > .menu-card { flex: 1; }
+
+/* ---------- 聊天气泡与快捷语 ---------- */
+.opp { position: relative; }
+.bubble { position: absolute; z-index: 35; max-width: 190px; padding: 8px 12px; border-radius: 14px; background: var(--ivory); color: var(--ink); font-size: 14px; font-weight: 600; line-height: 1.35; box-shadow: 0 6px 16px rgba(0, 0, 0, .35); pointer-events: none; animation: bubble 2.6s ease both; }
+.bubble::before { content: ''; position: absolute; width: 12px; height: 12px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
+.opp-bubble { top: 60px; left: 30px; }
+.opp-bubble::before { top: -5px; left: 18px; }
+.table.land .opp-bubble { top: 68px; left: 34px; }
+.me { position: relative; }
+.me-bubble { bottom: calc(100% + 4px); left: 16px; }
+.me-bubble::before { bottom: -5px; left: 16px; }
+@keyframes bubble { 0% { opacity: 0; transform: translateY(6px) scale(.9); } 8% { opacity: 1; transform: none; } 88% { opacity: 1; } 100% { opacity: 0; transform: translateY(-4px); } }
+.chat-btn { width: 36px; height: 36px; margin-left: 2px; color: var(--muted); }
+.chat-picker { position: absolute; z-index: 45; left: 12px; bottom: calc(100% + 6px); display: flex; flex-wrap: wrap; gap: 8px; max-width: 300px; padding: 10px; border-radius: 16px; background: var(--panel); box-shadow: 0 10px 28px rgba(0, 0, 0, .45); animation: coach-in .2s ease-out both; }
+.chat-picker .chip { border: 0; cursor: pointer; color: var(--text); }
+
+/* ---------- 建角色 ---------- */
+.profile-hero { display: flex; align-items: center; gap: 18px; }
+.profile-hero .avatar-art { box-shadow: 0 0 0 3px var(--brass); flex-shrink: 0; }
+.profile-hero p { margin: 0; font-size: 14px; line-height: 1.5; }
+.name-row { display: flex; gap: 10px; flex: 1; justify-content: flex-end; min-width: 0; }
+.name-row input { font: inherit; font-weight: 600; color: var(--text); background: var(--felt-deep); border: 1px solid var(--line); border-radius: 10px; height: 44px; padding: 0 12px; min-width: 0; flex: 1; max-width: 220px; -webkit-user-select: text; user-select: text; }
+.name-row .btn { height: 44px; padding: 0 14px; min-width: 0; font-size: 14px; }
+.av-section .label { margin: 4px 0 10px; }
+.av-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 12px; }
+.av-pick { border: 0; background: none; padding: 2px; border-radius: 50%; cursor: pointer; justify-self: center; transition: transform .12s ease; }
+.av-pick .avatar-art { box-shadow: 0 0 0 2px rgba(243, 238, 226, .25); }
+.av-pick.on { transform: scale(1.08); }
+.av-pick.on .avatar-art { box-shadow: 0 0 0 3px var(--brass), 0 0 16px rgba(226, 194, 126, .5); }
+.profile .page-foot { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--felt) 30%); }
+.profile-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: rgba(0, 0, 0, .2); border: 0; color: inherit; text-align: left; cursor: pointer; }
+.pr-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.pr-text small { color: var(--muted); font-size: 13px; }
+.sc-name { display: inline-flex; align-items: center; gap: 10px; }
+.screen-head.first { justify-content: center; padding-top: calc(var(--safe-t) + 18px); }
+.screen-head.first h2 { font-size: 26px; }
+/* 横屏：聊天按钮放到「你」这一栏右上角，不再占一行 */
+.table.land .chat-btn { position: absolute; right: 8px; top: -38px; }
+@media (orientation: landscape) and (max-height: 600px) {
+  .profile { max-width: 760px; }
+  .profile-hero .avatar-art { width: 64px; height: 64px; }
+  .screen-head.first { padding-top: calc(var(--safe-t) + 8px); }
+  .screen-head.first h2 { font-size: 20px; }
+  .profile .page-foot { padding-top: 8px; }
+  .profile .page-foot .btn { height: 48px; }
+}

@@ -12,6 +12,10 @@ export interface SaveData {
   levelOrder: LevelOrder;
   devUnlockAll: boolean;
   sound: boolean;
+  /** 对手聊天气泡 */
+  chat: boolean;
+  /** 建角色时选的名字与头像；未建时为 null */
+  profile: { name: string; avatar: string } | null;
   tutorialDone: boolean;
   haptics: boolean;
   quick: { opps: [string, string]; timed: boolean };
@@ -30,6 +34,8 @@ function defaults(): SaveData {
     levelOrder: DEFAULT_LEVEL_ORDER,
     devUnlockAll: false,
     sound: true,
+    chat: true,
+    profile: null,
     tutorialDone: false,
     haptics: true,
     quick: { opps: ['random', 'random'], timed: false },

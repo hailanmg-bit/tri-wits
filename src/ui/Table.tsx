@@ -9,6 +9,9 @@ import { Avatar, Icon, Sheet } from './common';
 import { RulesSheet } from './Rules';
 import { buzz, sfx } from '../app/sound';
 import { CoachAct, CoachStep, Tutorial } from '../app/tutorial';
+import { Bubble, Chatter } from '../app/chatter';
+import { quickChats } from '../app/lines';
+import { store } from '../app/store';
 
 interface Props {
   match: Match;
@@ -24,6 +27,10 @@ export function TableScreen({ match, banner, onQuit, onResults, coach }: Props) 
   useSubscribe(match);
   useSubscribe(coach);
   const step = coach?.step ?? null;
+  // 教程剧本阶段不聊天，以免打断提示
+  const chatter = useMemo(() => new Chatter(match, () => !!coach?.scripted), [match]);
+  useEffect(() => () => chatter.dispose(), [chatter]);
+  useSubscribe(chatter);
   const g = match.game;
   const land = useLandscape();
   const stage = g.round + ':' + g.phase;
@@ -73,10 +80,10 @@ export function TableScreen({ match, banner, onQuit, onResults, coach }: Props) 
       </header>
       {banner && <div class="level-banner">{banner}</div>}
 
-      <Opponent match={match} seat={1} name={name(1)} area="opp1" />
-      <Opponent match={match} seat={2} name={name(2)} area="opp2" />
+      <Opponent match={match} seat={1} name={name(1)} area="opp1" bubble={chatter.bubbleOf(1)} />
+      <Opponent match={match} seat={2} name={name(2)} area="opp2" bubble={chatter.bubbleOf(2)} />
       <Center match={match} name={name} land={land} />
-      <MeRow match={match} sel={sel} />
+      <MeRow match={match} sel={sel} chatter={chatter} canChat={!coach?.scripted} />
       <Hand match={match} sel={sel} setSel={setSel} land={land} coach={coach} step={step} />
       <Actions match={match} sel={sel} setSel={setSel} onResults={onResults} coach={coach} step={step} />
       {step && <CoachBubble step={step} params={{ a: name(1), b: name(2) }} />}
@@ -140,14 +147,14 @@ function lockedPlay(match: Match, seat: Seat): Card[] | null {
 
 /* ---------- 对手 ---------- */
 
-function Opponent({ match, seat, name, area }: { match: Match; seat: Seat; name: string; area: string }) {
+function Opponent({ match, seat, name, area, bubble }: { match: Match; seat: Seat; name: string; area: string; bubble?: Bubble }) {
   const g = match.game;
   const locked = lockedPlay(match, seat);
   const waiting = !locked && (g.phase === 'p1_select' || g.phase === 'p2_select') && match.needs(seat);
   return (
     <section class={'opp ' + area} aria-label={name}>
       <div class="opp-head">
-        <Avatar strategy={g.seatStrategies[seat]} name={name} size={44} />
+        <Avatar strategy={g.seatStrategies[seat]} size={44} />
         <div class="opp-meta">
           <div class="opp-name">{name}</div>
           <div class="muted">{t('cards', { n: g.hands[seat].length - (locked ? 3 : 0) })} · {t('pile', { n: g.piles[seat] })}</div>
@@ -161,6 +168,7 @@ function Opponent({ match, seat, name, area }: { match: Match; seat: Seat; name:
         </div>
         <StatusPill s={statusOf(match, seat)} />
       </div>
+      {bubble && <div class="bubble opp-bubble" key={bubble.id} role="status">{bubble.text}</div>}
     </section>
   );
 }
@@ -324,8 +332,11 @@ function withSuits(text: string) {
 
 /* ---------- 自己 ---------- */
 
-function MeRow({ match, sel }: { match: Match; sel: number[] }) {
+function MeRow({ match, sel, chatter, canChat }: { match: Match; sel: number[]; chatter: Chatter; canChat: boolean }) {
   const g = match.game;
+  const [picker, setPicker] = useState(false);
+  const bubble = chatter.bubbleOf(0);
+  const profile = store.get().profile;
   const locked = lockedPlay(match, 0);
   let chip: { text: string; bad: boolean; ok: boolean; target?: boolean } | null = null;
   if (sel.length === 3) {
@@ -338,12 +349,23 @@ function MeRow({ match, sel }: { match: Match; sel: number[] }) {
   return (
     <section class="me" style={{ position: 'relative' }}>
       <div class="me-left">
-        <Avatar strategy={null} name={t('you')} size={36} me />
+        <Avatar avatar={profile?.avatar} size={36} me />
         <span class="me-name">{t('you')}</span>
         <span class="muted">{t('cards', { n: g.hands[0].length - (locked ? 3 : 0) })} · {t('pile', { n: g.piles[0] })}</span>
         {g.base[0] > 0 && <span class="pill win pop">+5</span>}
         <Gain value={g.piles[0]} />
+        {canChat && store.get().chat && (
+          <button class="icon-btn chat-btn" aria-label={t('chat')} aria-expanded={picker} onClick={() => setPicker(v => !v)}><Icon name="chat" size={20} /></button>
+        )}
       </div>
+      {picker && (
+        <div class="chat-picker" role="menu">
+          {quickChats().map(c => (
+            <button key={c} role="menuitem" class="chip dark" onClick={() => { chatter.playerSays(c); setPicker(false); }}>{c}</button>
+          ))}
+        </div>
+      )}
+      {bubble && <div class="bubble me-bubble" key={bubble.id} role="status">{bubble.text}</div>}
       {chip && <span class={'chip ' + (chip.bad ? 'bad' : chip.ok ? 'ok' : chip.target ? 'outline' : 'light')}>{chip.ok ? '✓ ' : ''}{chip.text}</span>}
     </section>
   );

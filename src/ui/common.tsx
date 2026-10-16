@@ -1,30 +1,17 @@
 import { ComponentChildren } from 'preact';
 import { useEffect } from 'preact/hooks';
 
-/* 经典风头像：首字母圆章。头像库上线后由用户选择的头像替换 */
-const AVATAR_COLORS: Record<string, [string, string]> = {
-  '1-1': ['#C9A45C', '#1A1C22'],
-  '2-1': ['#8C5A3C', '#F3EEE2'],
-  '2-2': ['#4F6D8A', '#F3EEE2'],
-  '3-1': ['#6B4E8A', '#F3EEE2'],
-  'ai-1': ['#3E7C6B', '#F3EEE2'],
-  'ai-2': ['#5A6270', '#F3EEE2']
-};
+import { AvatarArt, BOT_AVATAR, DEFAULT_AVATAR } from './avatars';
 
-export function Avatar({ strategy, name, size, me }: { strategy: string | null; name: string; size: number; me?: boolean }) {
-  const [bg, fg] = me ? ['#F3EEE2', '#0F3D35'] : AVATAR_COLORS[strategy || ''] || ['#4F6D8A', '#F3EEE2'];
-  return (
-    <span
-      class={'avatar' + (me ? ' is-me' : '')}
-      aria-hidden="true"
-      style={{ width: size + 'px', height: size + 'px', fontSize: size * 0.45 + 'px', background: bg, color: fg }}
-    >
-      {Array.from(name)[0]}
-    </span>
-  );
+/** 座位头像：电脑用固定头像，玩家用建角色时选的头像 */
+export function Avatar({ strategy, avatar, size, me }: { strategy?: string | null; avatar?: string; size: number; me?: boolean }) {
+  const id = avatar || (strategy && BOT_AVATAR[strategy]) || DEFAULT_AVATAR;
+  return <span class={'avatar' + (me ? ' is-me' : '')} style={{ width: size + 'px', height: size + 'px' }}><AvatarArt id={id} size={size} /></span>;
 }
 
 const ICONS: Record<string, string> = {
+  chat: 'M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z',
+  edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
   menu: 'M4 7h16M4 12h16M4 17h16',
   help: 'M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6M12 16.8v.2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
   back: 'M15 5l-7 7 7 7',
