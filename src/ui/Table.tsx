@@ -1,6 +1,6 @@
 /* 牌桌：竖屏与横屏是两套网格布局，共用同一批组件 */
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { Card, GameEvent, HandType, RankedEntry, Seat, cardKey, compareCards, evalHand3 } from '../engine';
+import { Basis, Card, GameEvent, HandEval, HandType, RANK_STR, RankedEntry, SUIT_CHARS, Seat, cardKey, compareCards, evalHand3, explainEntry } from '../engine';
 import { Match } from '../app/match';
 import { useCountdown, useLandscape, useSize, useSubscribe } from '../app/hooks';
 import { botName, t, typeName } from '../app/i18n';
@@ -255,6 +255,8 @@ function lockedCount(match: Match): number {
 function Showdown({ ranked, phase, match, name, cardW }: { ranked: RankedEntry[]; phase: 'p1' | 'p2'; match: Match; name: (s: Seat) => string; cardW: number }) {
   const g = match.game;
   const winner = phase === 'p1' ? g.p1Winner : g.p2Winner;
+  const open = g.log.find(e => e.t === 'p2Open' && e.round === g.round);
+  const required = open && open.t === 'p2Open' ? open.type : g.requiredType;
   return (
     <ol class="sd-list">
       {ranked.map((e, row) => {
@@ -265,7 +267,10 @@ function Showdown({ ranked, phase, match, name, cardW }: { ranked: RankedEntry[]
             <span class="sd-cards" aria-label={cards.map(cardLabel).join(', ')}>
               {cards.map((c, i) => <CardView key={i} card={c} width={cardW} class="flip-in" style={{ '--i': row * 3 + i }} />)}
             </span>
-            <span class="sd-type">{typeName(e.ev.type)}{e.ev.special235 ? ' · 235' : ''}</span>
+            <span class="sd-info">
+              <span class="sd-type">{typeName(e.ev.type)}{e.ev.special235 ? ' · 235' : ''}</span>
+              {(() => { const why = basisText(explainEntry(ranked, row, required)); return <span class={'sd-why' + (e.seat === 0 ? ' mine' : '')} title={why}>{withSuits(why)}</span>; })()}
+            </span>
             {e.seat === winner && <span class="pill win">{t('tag_win')}</span>}
             {e.ev.invalid && <span class="pill bad">{t('tag_invalid')}</span>}
           </li>
@@ -273,6 +278,37 @@ function Showdown({ ranked, phase, match, name, cardW }: { ranked: RankedEntry[]
       })}
     </ol>
   );
+}
+
+/* 比牌说明：亮牌时顺带教规则 */
+const rankText = (r: number) => (r === 1 ? 'A' : RANK_STR[r] || String(r));
+
+function handText(ev: HandEval): string {
+  const p = ev.points;
+  let s = typeName(ev.type) + ' ';
+  if (ev.type === 2) s += t('ex_pairKick', { p: rankText(p[0]), k: rankText(p[1]) });
+  else if (ev.type === 1 || ev.type === 4) s += p.map(rankText).join(' ');
+  else s += rankText(p[0]);
+  return s + (ev.hasBig ? t('ex_withBig') : ev.hasSmall ? t('ex_withSmall') : '');
+}
+
+function basisText(b: Basis): string {
+  switch (b.k) {
+    case 'max': return t('ex_max', { hand: handText(b.ev) });
+    case '235Trips': return t('ex_235Trips');
+    case '235Suit': return t('ex_235Suit');
+    case '235Min': return t('ex_235Min');
+    case 'type': return t('ex_type', { mine: typeName(b.mine), above: typeName(b.above) });
+    case 'point': return t(b.at > 0 ? 'ex_pointLead' : 'ex_point', { mine: rankText(b.mine), above: rankText(b.above) });
+    case 'joker': return t(b.which === 'big' ? 'ex_jokerBig' : 'ex_jokerSmall');
+    case 'suit': return t('ex_suit', { mine: SUIT_CHARS[b.mine], above: SUIT_CHARS[b.above] });
+    case 'invalid': return t('ex_invalid', { req: typeName(b.required) });
+  }
+}
+
+/** 红桃、方块符号染红 */
+function withSuits(text: string) {
+  return text.split(/([♥♦])/).map((part, i) => (part === '♥' || part === '♦' ? <span key={i} class="red-suit">{part}</span> : part));
 }
 
 /* ---------- 自己 ---------- */
