@@ -34,9 +34,15 @@ function ScreenHead({ title, onBack }: { title: string; onBack(): void }) {
 
 /* ---------- 首页 ---------- */
 
-export function Home({ go }: { go(s: 'quick' | 'levels' | 'settings'): void }) {
+export function Home({ go }: { go(s: 'quick' | 'levels' | 'settings' | 'tutorial'): void }) {
   const d = useStore();
   const levels = getLevels(d.levelOrder);
+  const tutorialCard = (primary: boolean) => (
+    <button class={'menu-card' + (primary ? ' primary' : '')} data-go="tutorial" onClick={() => go('tutorial')}>
+      <span class="mc-title">{t('tutorial')}</span>
+      <span class="mc-sub">{t('tutorialSub')}</span>
+    </button>
+  );
   return (
     <main class="home">
       <div class="home-top">
@@ -49,17 +55,26 @@ export function Home({ go }: { go(s: 'quick' | 'levels' | 'settings'): void }) {
         <CardView card={{ r: 12, s: 2 }} width={92} style={{ transform: 'rotate(14deg) translate(-8px, 14px)' }} />
       </div>
       <nav class="home-menu">
-        <button class="menu-card primary" onClick={() => go('quick')}>
+        {/* 没学过规则时，教程排在最前 */}
+        {!d.tutorialDone && tutorialCard(true)}
+        <button class={'menu-card' + (d.tutorialDone ? ' primary' : '')} data-go="quick" onClick={() => go('quick')}>
           <span class="mc-title">{t('quickMatch')}</span>
           <span class="mc-sub">{t('quickMatchSub')}</span>
         </button>
-        <button class="menu-card" onClick={() => go('levels')}>
+        <button class="menu-card" data-go="levels" onClick={() => go('levels')}>
           <span class="mc-title">{t('levels')}</span>
           <span class="mc-sub">{t('levelsSub', { c: d.cleared[d.levelOrder].length, t: levels.length })}</span>
         </button>
-        <button class="menu-card slim" onClick={() => go('settings')}>
-          <Icon name="gear" size={20} /><span class="mc-title">{t('settings')}</span>
-        </button>
+        <div class="menu-row">
+          {d.tutorialDone && (
+            <button class="menu-card slim" data-go="tutorial" onClick={() => go('tutorial')}>
+              <Icon name="help" size={20} /><span class="mc-title">{t('tutorial')}</span>
+            </button>
+          )}
+          <button class="menu-card slim" data-go="settings" onClick={() => go('settings')}>
+            <Icon name="gear" size={20} /><span class="mc-title">{t('settings')}</span>
+          </button>
+        </div>
       </nav>
     </main>
   );
@@ -207,9 +222,11 @@ export function Settings({ onBack, dev }: { onBack(): void; dev: boolean }) {
 
 export interface LevelResult { cfg: LevelConfig; run: LevelRun }
 
-export function Results({ match, level, onAgain, onHome, onNextGame, onRetry, onNextLevel, onLevels }: {
+export function Results({ match, level, tutorial, onQuick, onAgain, onHome, onNextGame, onRetry, onNextLevel, onLevels }: {
   match: Match;
   level: LevelResult | null;
+  tutorial?: boolean;
+  onQuick(): void;
   onAgain(): void; onHome(): void;
   onNextGame(): void; onRetry(): void; onNextLevel(): void; onLevels(): void;
 }) {
@@ -250,8 +267,18 @@ export function Results({ match, level, onAgain, onHome, onNextGame, onRetry, on
             {run.status === 'failed' && <><div class="verdict fail">{t('lv_failed')}</div><div class="muted">{reason}</div></>}
           </div>
         )}
+        {tutorial && (
+          <div class="lv-result">
+            <div class="verdict pass">{t('tut_doneTitle')}</div>
+            <div class="muted">{t('tut_doneSub')}</div>
+          </div>
+        )}
         <div class="btn-row">
-          {!level && <>
+          {tutorial && <>
+            <button class="btn ghost" onClick={onHome}>{t('home')}</button>
+            <button class="btn primary grow" onClick={onQuick}>{t('tut_play')}</button>
+          </>}
+          {!level && !tutorial && <>
             <button class="btn ghost" onClick={onHome}>{t('home')}</button>
             <button class="btn primary grow" onClick={onAgain}>{t('playAgain')}</button>
           </>}

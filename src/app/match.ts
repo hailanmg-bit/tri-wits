@@ -1,10 +1,14 @@
 /* 一局对局的驱动：真人在 0 号座位，电脑各自独立“思考”后出牌；限时模式下超时自动代打。 */
-import { Game, GameEvent, Rng, Seat, applyAction, botStep, decideBot, defaultRng, resolveStrategies } from '../engine';
+import { BotAction, Card, Game, GameEvent, Rng, Seat, applyAction, decideBot, defaultRng, resolveStrategies } from '../engine';
 
 export interface MatchOptions {
   bots: [string, string];   // 1、2 号座位的策略（'random' 为随机）
   timed: boolean;
   rng?: Rng;
+  /** 指定三手牌（新手教程） */
+  hands?: [Card[], Card[], Card[]];
+  /** 电脑的剧本动作；返回 null 时按策略行动 */
+  script?: (game: Game, seat: Seat) => BotAction | null;
 }
 
 const BOT_DELAY = [450, 1050];
@@ -25,12 +29,14 @@ export class Match {
   private turnKey = '';
   private nextTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
+  private script: MatchOptions['script'];
 
   constructor(opts: MatchOptions) {
     const rng = opts.rng ?? defaultRng;
     this.timed = opts.timed;
+    this.script = opts.script;
     this.game = new Game(['human', 'ai', 'ai'], rng);
-    this.game.start();
+    if (opts.hands) this.game.startWith(opts.hands); else this.game.start();
     this.game.seatStrategies = resolveStrategies(this.game.seatTypes, [null, opts.bots[0], opts.bots[1]], rng);
     this.tick();
   }
@@ -95,7 +101,8 @@ export class Match {
       this.botTimers.set(seat, setTimeout(() => {
         this.botTimers.delete(seat);
         if (this.disposed || this.stageKey() !== key || !this.needs(seat)) { this.scheduleBots(); return; }
-        botStep(this.game, seat);
+        const a = this.script?.(this.game, seat) ?? decideBot(this.game, seat);
+        if (a && !applyAction(this.game, seat, a)) throw new Error(`bot produced illegal action ${JSON.stringify(a)}`);
         this.tick();
       }, delay));
     }

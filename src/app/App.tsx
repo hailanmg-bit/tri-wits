@@ -6,15 +6,17 @@ import { t } from './i18n';
 import { useStore } from './hooks';
 import { TableScreen } from '../ui/Table';
 import { sfx } from './sound';
+import { TUTORIAL_BOTS, Tutorial, tutorialHands, tutorialScript } from './tutorial';
 import { Home, LevelList, QuickSetup, Results, Settings, goalText } from '../ui/screens';
 
-type View = 'home' | 'quick' | 'levels' | 'settings' | 'game';
+type View = 'home' | 'quick' | 'levels' | 'settings' | 'game' | 'tutorial';
 
 interface Session {
   id: number;
   match: Match;
   quick?: { opps: [string, string]; timed: boolean };
   level?: { cfg: LevelConfig; run: LevelRun };
+  tutorial?: Tutorial;
   results: boolean;
 }
 
@@ -38,6 +40,13 @@ export function App() {
     setView('game');
   };
 
+  const startTutorial = () => {
+    session?.match.dispose();
+    const match = new Match({ bots: TUTORIAL_BOTS, timed: false, hands: tutorialHands(), script: tutorialScript });
+    setSession({ id: nextId++, match, tutorial: new Tutorial(match), results: false });
+    setView('game');
+  };
+
   const playLevel = (cfg: LevelConfig) => begin({ level: { cfg, run: startRun(cfg, Math.random) } });
 
   /** 对局结束：记录战绩与闯关进度（每局只记一次），然后显示结算 */
@@ -47,7 +56,10 @@ export function App() {
     if (!g.gameOver) return;
     const won = playerWon(g), score = g.finalScores![0], base = g.base[0] > 0;
     let level = session.level;
-    if (level) {
+    if (session.tutorial) {
+      // 教程不计入战绩
+      store.update(s => ({ ...s, tutorialDone: true }));
+    } else if (level) {
       const run = recordGame(level.cfg, level.run, g);
       level = { ...level, run };
       const id = level.cfg.id;
@@ -73,11 +85,13 @@ export function App() {
     const banner = lv ? `${t('lv_name', { n: lv.cfg.id })} · ${t('lv_game', { x: lv.run.idx + 1, y: lv.cfg.games })} · ${goalText(lv.cfg)}` : undefined;
     return (
       <>
-        <TableScreen key={session.id} match={session.match} banner={banner} onQuit={quit} onResults={showResults} />
+        <TableScreen key={session.id} match={session.match} banner={banner} onQuit={quit} onResults={showResults} coach={session.tutorial} />
         {session.results && (
           <Results
             match={session.match}
             level={lv ?? null}
+            tutorial={!!session.tutorial}
+            onQuick={() => { session.match.dispose(); setSession(null); setView('quick'); }}
             onAgain={() => begin({ quick: session.quick })}
             onHome={quit}
             onLevels={() => { session.match.dispose(); setSession(null); setView('levels'); }}
@@ -93,5 +107,5 @@ export function App() {
   if (view === 'quick') return <QuickSetup onBack={() => setView('home')} onStart={(opps, timed) => begin({ quick: { opps, timed } })} />;
   if (view === 'levels') return <LevelList onBack={() => setView('home')} onPlay={playLevel} />;
   if (view === 'settings') return <Settings onBack={() => setView('home')} dev={DEV} />;
-  return <Home go={setView} />;
+  return <Home go={v => (v === 'tutorial' ? startTutorial() : setView(v))} />;
 }

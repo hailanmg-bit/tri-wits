@@ -11,6 +11,7 @@ export interface SaveData {
   levelOrder: LevelOrder;
   devUnlockAll: boolean;
   sound: boolean;
+  tutorialDone: boolean;
   haptics: boolean;
   quick: { opps: [string, string]; timed: boolean };
   /** 两套对手顺序的关卡不同，进度分开记 */
@@ -27,6 +28,7 @@ function defaults(): SaveData {
     levelOrder: DEFAULT_LEVEL_ORDER,
     devUnlockAll: false,
     sound: true,
+    tutorialDone: false,
     haptics: true,
     quick: { opps: ['random', 'random'], timed: false },
     cleared: { original: [], simulated: [] },

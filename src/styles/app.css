@@ -71,7 +71,7 @@ h1, h2, h3 { margin: 0; }
 .card.joker .jk-word { position: absolute; left: .3em; top: .32em; writing-mode: vertical-rl; text-orientation: upright; font-size: .62em; font-weight: 700; letter-spacing: -.12em; line-height: 1; }
 .card.joker .pip-big { left: 1.3em; top: 2.4em; width: 2.4em; height: 2.4em; }
 .card.sel { box-shadow: 0 0 0 3px var(--brass), 0 .6em 1.1em rgba(0, 0, 0, .35); }
-.card.dim { opacity: .5; }
+.card.dim { filter: brightness(.55) saturate(.6); }
 .card.back {
   background-color: var(--back);
   background-image: repeating-linear-gradient(45deg, rgba(251, 248, 241, .14) 0 1px, transparent 1px .45em),
@@ -279,7 +279,8 @@ h1, h2, h3 { margin: 0; }
 /* 发牌：手牌从牌桌上方依次落下（元素只在开局挂载一次） */
 .hand-card { transition: top .14s ease, left .28s ease; }
 .hand-card > .card { animation: deal .5s cubic-bezier(.2, .9, .3, 1) both; animation-delay: calc(var(--d, 0) * 32ms); }
-@keyframes deal { from { opacity: 0; transform: translateY(-46vh) rotate(-14deg) scale(.55); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+/* 只写起点：终点回到元素自身的样式，不会盖住 .dim 等状态 */
+@keyframes deal { from { opacity: 0; transform: translateY(-46vh) rotate(-14deg) scale(.55); } }
 
 /* 出牌：对手的牌背落桌、牌池叠牌 */
 .drop-in { animation: drop-in .32s cubic-bezier(.2, 1.3, .5, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
@@ -311,3 +312,24 @@ h1, h2, h3 { margin: 0; }
 .verdict { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1) .55s both; }
 .sheet.results { animation: sheet-up .3s cubic-bezier(.2, .9, .3, 1) both; }
 @keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } }
+
+/* ---------- 新手教程 ---------- */
+.coach { position: relative; z-index: 40; margin: 0 12px; padding: 14px 18px; border-radius: 16px; background: var(--ivory); color: var(--ink); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); border-left: 5px solid var(--brass); animation: coach-in .32s cubic-bezier(.2, 1.2, .4, 1) both; }
+.coach.at-hand { grid-area: hand; align-self: center; }
+.coach.at-center { grid-area: center; align-self: end; margin-bottom: 6px; }
+.coach-text { margin: 0; font-size: 15px; line-height: 1.5; font-weight: 500; }
+.coach .red-suit { color: var(--red); }
+.coach-types { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 4px; align-items: center; }
+.coach-types li { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; }
+.coach-types li > .gt { color: var(--brass-deep); font-weight: 800; margin-right: 2px; }
+.table.land .coach { padding: 10px 14px; }
+.table.land .coach-text { font-size: 14px; line-height: 1.4; }
+.table.land .coach.at-hand { align-self: end; margin-bottom: 8px; }
+@keyframes coach-in { from { opacity: 0; transform: translateY(12px) scale(.97); } }
+.card.coach-glow { box-shadow: 0 0 0 3px #F6DE9E, 0 .25em .6em rgba(0, 0, 0, .28); animation: coach-glow 1.1s ease-in-out infinite; }
+@keyframes coach-glow { 50% { box-shadow: 0 0 0 3px #F6DE9E, 0 0 20px 6px rgba(246, 222, 158, .85); } }
+.btn.coach-target:not(:disabled) { animation: target-pulse 1.3s ease-in-out infinite; }
+@keyframes target-pulse { 50% { box-shadow: 0 4px 0 var(--brass-deep), 0 0 0 6px rgba(246, 222, 158, .35); } }
+.btn.ghost.coach-target:not(:disabled) { border-color: var(--brass); color: var(--brass); }
+.menu-row { display: flex; gap: 14px; }
+.menu-row > .menu-card { flex: 1; }

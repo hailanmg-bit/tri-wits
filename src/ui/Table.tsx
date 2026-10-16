@@ -8,6 +8,7 @@ import { CardView, cardLabel } from './Card';
 import { Avatar, Icon, Sheet } from './common';
 import { RulesSheet } from './Rules';
 import { buzz, sfx } from '../app/sound';
+import { CoachAct, CoachStep, Tutorial } from '../app/tutorial';
 
 interface Props {
   match: Match;
@@ -15,10 +16,14 @@ interface Props {
   banner?: string;
   onQuit(): void;
   onResults(): void;
+  /** 新手教程：提示与操作限制 */
+  coach?: Tutorial;
 }
 
-export function TableScreen({ match, banner, onQuit, onResults }: Props) {
+export function TableScreen({ match, banner, onQuit, onResults, coach }: Props) {
   useSubscribe(match);
+  useSubscribe(coach);
+  const step = coach?.step ?? null;
   const g = match.game;
   const land = useLandscape();
   const stage = g.round + ':' + g.phase;
@@ -67,8 +72,9 @@ export function TableScreen({ match, banner, onQuit, onResults }: Props) {
       <Opponent match={match} seat={2} name={name(2)} area="opp2" />
       <Center match={match} name={name} land={land} />
       <MeRow match={match} sel={sel} />
-      <Hand match={match} sel={sel} setSel={setSel} land={land} />
-      <Actions match={match} sel={sel} setSel={setSel} onResults={onResults} />
+      <Hand match={match} sel={sel} setSel={setSel} land={land} coach={coach} step={step} />
+      <Actions match={match} sel={sel} setSel={setSel} onResults={onResults} coach={coach} step={step} />
+      {step && <CoachBubble step={step} params={{ a: name(1), b: name(2) }} />}
 
       {menu && (
         <Sheet onClose={() => setMenu(false)}>
@@ -341,11 +347,14 @@ function MeRow({ match, sel }: { match: Match; sel: number[] }) {
 type SetSel = (v: number[] | ((prev: number[]) => number[])) => void;
 
 /** 竖屏手牌超过 12 张时分两排，避免点数被压住 */
-function Hand({ match, sel, setSel, land }: { match: Match; sel: number[]; setSel: SetSel; land: boolean }) {
+function Hand({ match, sel, setSel, land, coach, step: cstep }: { match: Match; sel: number[]; setSel: SetSel; land: boolean; coach?: Tutorial; step: CoachStep | null }) {
   const g = match.game;
   const [ref, size] = useSize<HTMLDivElement>();
   const locked = lockedPlay(match, 0);
-  const canPick = (g.phase === 'p1_select' || g.phase === 'p2_select') && match.needs(0);
+  // 教程剧本阶段：只能选提示的牌
+  const canPick = (g.phase === 'p1_select' || g.phase === 'p2_select') && match.needs(0) &&
+    !(coach?.scripted && (!cstep || cstep.mode === 'tap'));
+  const allowed = (c: Card) => !coach?.scripted || !cstep?.pick || cstep.pick.includes(cardKey(c));
   const list = g.hands[0].map((c, i) => ({ c, i })).filter(x => !locked || !locked.includes(x.c)).sort((a, b) => compareCards(a.c, b.c));
 
   const W = size.w || 360;
@@ -380,11 +389,11 @@ function Hand({ match, sel, setSel, land }: { match: Match; sel: number[]; setSe
             class="hand-card"
             aria-pressed={on}
             aria-label={cardLabel(c)}
-            disabled={!canPick}
+            disabled={!canPick || !allowed(c)}
             onClick={() => toggle(i)}
             style={{ left: off + col * step + 'px', top: r * rowGap + (on ? 0 : lift) + 'px', zIndex: k, '--d': k }}
           >
-            <CardView card={c} width={cardW} selected={on} />
+            <CardView card={c} width={cardW} selected={on} class={canPick && cstep?.pick?.includes(cardKey(c)) && !on ? 'coach-glow' : ''} dim={canPick && !allowed(c)} />
           </button>
         );
       })}
@@ -392,27 +401,34 @@ function Hand({ match, sel, setSel, land }: { match: Match; sel: number[]; setSe
   );
 }
 
-function Actions({ match, sel, setSel, onResults }: { match: Match; sel: number[]; setSel: SetSel; onResults(): void }) {
+function Actions({ match, sel, setSel, onResults, coach, step }: { match: Match; sel: number[]; setSel: SetSel; onResults(): void; coach?: Tutorial; step: CoachStep | null }) {
   const g = match.game;
+  // 教程：tap 提示只显示「知道了」；act 提示只开放指定的按钮
+  const lock = (a: CoachAct) => !!coach?.scripted && (!step || step.act !== a);
+  const mark = (a: CoachAct) => (step?.act === a ? ' coach-target' : '');
+  const did = (a: CoachAct) => coach?.acted(a);
+  const pickOk = !step?.pick || (sel.length === 3 && sel.every(i => step.pick!.includes(cardKey(g.hands[0][i]))));
   let body;
-  if (g.phase === 'game_over') {
+  if (step?.mode === 'tap') {
+    body = <button class="btn primary grow coach-target" data-act="coach" onClick={() => { sfx('button'); coach!.next(); }}>{t('tut_continue')}</button>;
+  } else if (g.phase === 'game_over') {
     body = <button class="btn primary grow" data-act="results" onClick={onResults}>{t('btn_results')}</button>;
   } else if (g.phase === 'round_end') {
     const ending = g.holders().length <= 1;
     body = ending
       ? <button class="btn primary grow" data-act="results" onClick={() => { match.nextRound(); onResults(); }}>{t('btn_results')}</button>
-      : <button class="btn primary grow" data-act="next" onClick={() => { sfx('button'); match.nextRound(); }}>{t('btn_next')}</button>;
+      : <button class={'btn primary grow' + mark('next')} data-act="next" disabled={lock('next')} onClick={() => { sfx('button'); did('next'); match.nextRound(); }}>{t('btn_next')}</button>;
   } else if (g.phase === 'p2_choose' && match.needs(0)) {
     body = <>
-      <button class="btn ghost" data-act="skip" onClick={() => { sfx('button'); match.chooseJoin(false); }}>{t('btn_skip')}</button>
-      <button class="btn primary grow" data-act="join" onClick={() => { sfx('button'); match.chooseJoin(true); }}>{t('btn_join')}</button>
+      <button class={'btn ghost' + mark('skip')} data-act="skip" disabled={lock('skip')} onClick={() => { sfx('button'); did('skip'); match.chooseJoin(false); }}>{t('btn_skip')}</button>
+      <button class={'btn primary grow' + mark('join')} data-act="join" disabled={lock('join')} onClick={() => { sfx('button'); did('join'); match.chooseJoin(true); }}>{t('btn_join')}</button>
     </>;
   } else if ((g.phase === 'p1_select' || g.phase === 'p2_select') && match.needs(0)) {
     const invalid = sel.length === 3 && g.phase === 'p2_select' &&
       evalHand3(sel.map(i => g.hands[0][i])).type !== g.requiredType;
     body = <>
       <button class="btn ghost" onClick={() => { sfx('deselect'); setSel([]); }} disabled={!sel.length}>{t('btn_reset')}</button>
-      <button class="btn primary grow" data-act="play" disabled={sel.length !== 3} onClick={() => match.playCards(sel)}>
+      <button class={'btn primary grow' + (sel.length === 3 && pickOk ? mark('play') : '')} data-act="play" disabled={sel.length !== 3 || lock('play') || !pickOk} onClick={() => { did('play'); match.playCards(sel); }}>
         {sel.length === 3 ? t('btn_play') : t('hint_selected', { n: sel.length })}
       </button>
       {invalid && <div class="action-warn" role="status">{t('hint_invalid', { req: typeName(g.requiredType) })}</div>}
@@ -463,4 +479,21 @@ function useGameSounds(match: Match) {
       }
     }
   }, [match.version]);
+}
+
+/* ---------- 新手教程提示 ---------- */
+
+const TYPE_ORDER: HandType[] = [6, 5, 4, 3, 2, 1];
+
+function CoachBubble({ step, params }: { step: CoachStep; params: Record<string, string> }) {
+  return (
+    <div class={'coach at-' + step.at} role="status" aria-live="polite" key={step.text}>
+      <p class="coach-text">{withSuits(t(step.text, params))}</p>
+      {step.types && (
+        <ol class="coach-types">
+          {TYPE_ORDER.map((tp, i) => <li key={tp}>{i > 0 && <span class="gt">&gt;</span>}{typeName(tp)}</li>)}
+        </ol>
+      )}
+    </div>
+  );
 }
