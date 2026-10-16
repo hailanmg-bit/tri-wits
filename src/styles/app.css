@@ -122,7 +122,7 @@ h1, h2, h3 { margin: 0; }
 .slot-dashed { position: absolute; inset: 0; border: 1.5px dashed rgba(243, 238, 226, .3); border-radius: 6px; }
 .table.land .opp { padding: 16px 20px; }
 
-.center { grid-area: center; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; min-height: 0; }
+.center { grid-area: center; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 12px; padding: 8px 16px; min-height: 0; }
 .felt-ring { position: absolute; inset: 8px 20px; border-radius: 50%; border: 1.5px solid rgba(226, 194, 126, .4); background: rgba(255, 255, 255, .035); pointer-events: none; }
 .pool { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .pool-stack { position: relative; width: 74px; height: 66px; }
@@ -155,10 +155,10 @@ h1, h2, h3 { margin: 0; }
 .actions { grid-area: actions; position: relative; display: flex; gap: 12px; align-items: center; padding: 12px 16px calc(var(--safe-b) + 14px); background: rgba(0, 0, 0, .22); min-height: 80px; }
 .actions .btn.ghost { min-width: 104px; }
 .action-wait { flex: 1; text-align: center; color: var(--muted); font-size: 15px; }
-.action-warn { position: absolute; left: 16px; right: 16px; top: -30px; text-align: center; font-size: 13px; font-weight: 600; color: #FFD9D3; }
+.action-warn { position: absolute; left: 50%; transform: translateX(-50%); top: -38px; z-index: 30; white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 700; color: #FFF6F2; background: var(--red); padding: 6px 14px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0, 0, 0, .3); }
 .table.land .actions { flex-direction: column-reverse; align-items: stretch; justify-content: flex-end; gap: 8px; background: transparent; padding: 4px 20px calc(var(--safe-b) + 10px); min-height: 0; align-self: end; }
 .table.land .actions .btn { width: 100%; height: 46px; }
-.table.land .action-warn { position: static; text-align: left; }
+.table.land .action-warn { left: 20px; right: 20px; top: auto; bottom: calc(100% + 4px); transform: none; max-width: none; white-space: normal; text-align: center; border-radius: 10px; }
 
 /* ============ 页面 ============ */
 .home { min-height: 100dvh; display: flex; flex-direction: column; justify-content: space-between; padding: calc(var(--safe-t) + 48px) 24px calc(var(--safe-b) + 32px); max-width: 520px; margin: 0 auto; gap: 32px; }
@@ -244,3 +244,24 @@ h1, h2, h3 { margin: 0; }
   .hero-fan { display: none; }
   .home-menu { flex: 1; max-width: 400px; }
 }
+
+/* 第二阶段牌型要求：中央提示牌 */
+.req-plaque { position: relative; display: flex; align-items: center; gap: 16px; padding: 12px 18px; border-radius: 16px; background: linear-gradient(180deg, #F1D79B, var(--brass)); color: var(--ink); box-shadow: 0 4px 0 var(--brass-deep), 0 8px 18px rgba(0, 0, 0, .3); animation: req-in .5s cubic-bezier(.2, 1.4, .4, 1) both, req-glow 2.4s ease-in-out .5s infinite; }
+.req-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.req-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .72; }
+.req-type { font-family: var(--font-display); font-size: 34px; font-weight: 800; line-height: 1.05; }
+.req-why { font-size: 12px; font-weight: 600; opacity: .7; }
+.req-eg { display: flex; flex-shrink: 0; }
+.req-eg .card { box-shadow: 0 2px 4px rgba(0, 0, 0, .25); }
+.req-eg .card + .card { margin-left: -8px; }
+.req-plaque.compact { gap: 12px; padding: 8px 14px; border-radius: 12px; }
+.req-plaque.compact .req-type { font-size: 24px; }
+.req-plaque.compact .req-label { font-size: 11px; }
+.req-plaque.compact .req-why { display: none; }
+.table.land .showdown .req-plaque.compact { padding: 5px 12px; }
+.table.land .showdown .req-plaque.compact .req-type { font-size: 20px; }
+.chip.ok { background: #3FA372; color: #F4FFF8; }
+@keyframes req-in { from { opacity: 0; transform: scale(.7) translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes req-glow { 50% { box-shadow: 0 4px 0 var(--brass-deep), 0 8px 18px rgba(0, 0, 0, .3), 0 0 26px rgba(241, 215, 155, .55); } }
+.table.land .pool.has-req .pool-stack { display: none; }
+.table.land .pool.has-req { gap: 8px; }

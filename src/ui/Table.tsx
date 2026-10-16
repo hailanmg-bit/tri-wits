@@ -1,6 +1,6 @@
 /* 牌桌：竖屏与横屏是两套网格布局，共用同一批组件 */
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { Card, GameEvent, RankedEntry, Seat, compareCards, evalHand3 } from '../engine';
+import { Card, GameEvent, HandType, RankedEntry, Seat, compareCards, evalHand3 } from '../engine';
 import { Match } from '../app/match';
 import { useCountdown, useLandscape, useSize, useSubscribe } from '../app/hooks';
 import { botName, t, typeName } from '../app/i18n';
@@ -150,10 +150,10 @@ function Opponent({ match, seat, name, area }: { match: Match; seat: Seat; name:
 
 function eventText(e: GameEvent, name: (s: Seat) => string): string | null {
   switch (e.t) {
-    case 'p1Won': case 'p2Won': return t('ev_won', { name: name(e.seat), n: e.n, type: typeName(e.type) });
+    case 'p1Won': case 'p2Won': return t(e.seat === 0 ? 'ev_wonYou' : 'ev_won', { name: name(e.seat), n: e.n, type: typeName(e.type) });
     case 'p2AllInvalid': return t('ev_allInvalid');
     case 'p2NotEnough': return t('ev_notOpened');
-    case 'emptied': return t('ev_out', { name: name(e.seat) });
+    case 'emptied': return t(e.seat === 0 ? 'ev_outYou' : 'ev_out', { name: name(e.seat) });
     default: return null;
   }
 }
@@ -182,17 +182,18 @@ function Center({ match, name, land }: { match: Match; name: (s: Seat) => string
     <section class="center">
       <div class="felt-ring" aria-hidden="true" />
       {selecting ? (
-        <div class="pool">
+        <div class={'pool' + (g.phase === 'p2_select' ? ' has-req' : '')}>
+          {g.phase === 'p2_select' && <RequiredPlaque match={match} compact={land} />}
           <div class="pool-stack">
             {Array.from({ length: Math.min(3, lockedCount(match)) }, (_, i) => (
               <CardView key={i} width={42} faceDown style={{ left: 6 + i * 12 + 'px', transform: `rotate(${(i - 1) * 8}deg)` }} />
             ))}
           </div>
           <div class="chip dark">{t('pool', { a: lockedCount(match) * 3, b: g.pending.length * 3 })}</div>
-          {g.phase === 'p2_select' && <div class="chip outline">{t('required', { type: typeName(g.requiredType) })}</div>}
         </div>
       ) : (
         <div class="showdown">
+          {g.phase === 'p2_choose' && <RequiredPlaque match={match} compact />}
           {resolved.p1 && resolved.p2 && (
             <div class="tabs" role="tablist">
               <button role="tab" aria-selected={tab === 'p1'} class={tab === 'p1' ? 'on' : ''} onClick={() => setTab('p1')}>{t('phase1')}</button>
@@ -202,8 +203,38 @@ function Center({ match, name, land }: { match: Match; name: (s: Seat) => string
           {resolved[tab] && <Showdown ranked={resolved[tab]!} phase={tab} match={match} name={name} cardW={land ? 24 : 30} />}
         </div>
       )}
-      {(timeoutMsg || msg) && <div class="center-msg" aria-live="polite">{timeoutMsg || msg}</div>}
+      {/* 横屏中区较矮：第二阶段让位给牌型提示牌，赢家已在亮牌列表中标出 */}
+      {(timeoutMsg || (msg && !(land && g.requiredType))) && <div class="center-msg" aria-live="polite">{timeoutMsg || msg}</div>}
     </section>
+  );
+}
+
+/* 第二阶段的牌型要求：本回合最关键的信息，单独做成牌桌中央的提示牌 */
+const EXAMPLES: Record<HandType, Card[]> = {
+  1: [{ r: 13, s: 0 }, { r: 8, s: 1 }, { r: 3, s: 2 }],
+  2: [{ r: 9, s: 0 }, { r: 9, s: 1 }, { r: 4, s: 2 }],
+  3: [{ r: 5, s: 2 }, { r: 6, s: 3 }, { r: 7, s: 0 }],
+  4: [{ r: 3, s: 1 }, { r: 8, s: 1 }, { r: 12, s: 1 }],
+  5: [{ r: 8, s: 0 }, { r: 9, s: 0 }, { r: 10, s: 0 }],
+  6: [{ r: 12, s: 0 }, { r: 12, s: 1 }, { r: 12, s: 3 }]
+};
+
+function RequiredPlaque({ match, compact }: { match: Match; compact?: boolean }) {
+  const g = match.game;
+  const tp = g.requiredType;
+  if (!tp) return null;
+  const by235 = !!g.p1Ranked?.[0]?.ev.special235;
+  return (
+    <div class={'req-plaque' + (compact ? ' compact' : '')} role="status" aria-label={t('req_label') + ' ' + typeName(tp)}>
+      <div class="req-text">
+        <div class="req-label">{t('req_label')}</div>
+        <div class="req-type">{typeName(tp)}</div>
+        <div class="req-why">{by235 ? t('req_why235') : t('req_whyWeakest')}</div>
+      </div>
+      <div class="req-eg" aria-hidden="true">
+        {EXAMPLES[tp].map((c, i) => <CardView key={i} card={c} width={compact ? 26 : 34} />)}
+      </div>
+    </div>
   );
 }
 
@@ -241,11 +272,13 @@ function Showdown({ ranked, phase, match, name, cardW }: { ranked: RankedEntry[]
 function MeRow({ match, sel }: { match: Match; sel: number[] }) {
   const g = match.game;
   const locked = lockedPlay(match, 0);
-  let chip: { text: string; bad: boolean } | null = null;
+  let chip: { text: string; bad: boolean; ok: boolean; target?: boolean } | null = null;
   if (sel.length === 3) {
     const ev = evalHand3(sel.map(i => g.hands[0][i]));
-    const bad = g.phase === 'p2_select' && ev.type !== g.requiredType;
-    chip = { text: typeName(ev.type) + (ev.special235 ? ' · 235' : ''), bad };
+    const p2 = g.phase === 'p2_select';
+    chip = { text: typeName(ev.type) + (ev.special235 ? ' · 235' : ''), bad: p2 && ev.type !== g.requiredType, ok: p2 && ev.type === g.requiredType };
+  } else if (g.phase === 'p2_select' && match.needs(0)) {
+    chip = { text: t('req_need', { type: typeName(g.requiredType) }), bad: false, ok: false, target: true };
   }
   return (
     <section class="me">
@@ -255,7 +288,7 @@ function MeRow({ match, sel }: { match: Match; sel: number[] }) {
         <span class="muted">{t('cards', { n: g.hands[0].length - (locked ? 3 : 0) })} · {t('pile', { n: g.piles[0] })}</span>
         {g.base[0] > 0 && <span class="pill win">+5</span>}
       </div>
-      {chip && <span class={'chip ' + (chip.bad ? 'bad' : 'light')}>{chip.text}</span>}
+      {chip && <span class={'chip ' + (chip.bad ? 'bad' : chip.ok ? 'ok' : chip.target ? 'outline' : 'light')}>{chip.ok ? '✓ ' : ''}{chip.text}</span>}
     </section>
   );
 }
