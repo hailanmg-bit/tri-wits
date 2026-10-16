@@ -34,3 +34,17 @@ npm run sim -- 40   # 每个策略对阵其余策略，每个座位 40 局
 - 牌型从大到小：三条 > 同花顺 > 同花 > 顺子 > 对子 > 单张。A23 是最小的顺子，QKA 是最大的，K-A-2 不算顺子。
 - 王是万能牌，同牌型同点数时大王 > 小王 > 无王；花色 ♠ > ♥ > ♣ > ♦。
 - 非同花 235：和三条同场时最大，否则最小。
+
+## 打包成 App（Capacitor）
+
+| 命令 | 作用 |
+| --- | --- |
+| `npm run ios` | 构建网页并同步到 iOS 工程，打开 Xcode |
+| `npm run android` | 构建网页并同步到安卓工程，打开 Android Studio |
+| `npm run apk` | 直接打安卓调试包，输出 `android/app/build/outputs/apk/debug/app-debug.apk` |
+| `npm run aab` | 打安卓上架包（需先配置签名） |
+| `npm run assets:draw` / `npm run assets` | 重新绘制图标与启动图 / 生成各尺寸 |
+
+- Bundle ID：`com.triwits.game`（`capacitor.config.ts`），在商店建档前确认。
+- 安卓工程需要 JDK 21；`scripts/android-env.sh` 会自动使用 Homebrew 的 `openjdk@21`。
+- 原生端存档同时写入 Capacitor Preferences，避免系统清理 WebView 存储导致进度丢失。

@@ -6,6 +6,7 @@ import { t } from './i18n';
 import { useStore } from './hooks';
 import { TableScreen } from '../ui/Table';
 import { sfx } from './sound';
+import { exitApp } from './native';
 import { TUTORIAL_BOTS, Tutorial, tutorialHands, tutorialScript } from './tutorial';
 import { Home, LevelList, QuickSetup, Results, Settings, goalText } from '../ui/screens';
 
@@ -77,6 +78,18 @@ export function App() {
   };
 
   if (DEV) (window as unknown as { __tw?: Session | null }).__tw = session;
+
+  // 安卓返回键：牌桌由 TableScreen 自己处理（开关菜单），结算时回首页，其他页面回首页，首页退出
+  useEffect(() => {
+    const onBack = () => {
+      if (view === 'game' && session && !session.results) return;
+      if (view === 'game') { session?.match.dispose(); setSession(null); setView('home'); }
+      else if (view !== 'home') setView('home');
+      else exitApp();
+    };
+    window.addEventListener('tw-back', onBack);
+    return () => window.removeEventListener('tw-back', onBack);
+  }, [view, session]);
 
   const quit = () => { session?.match.dispose(); setSession(null); setView('home'); };
 

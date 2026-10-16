@@ -1,5 +1,6 @@
 /* 音效：全部用 WebAudio 实时合成，不依赖音频文件；震动走 navigator.vibrate（打包后换成 Capacitor Haptics） */
 import { store } from './store';
+import { nativeBuzz } from './native';
 
 export type Sfx =
   | 'select' | 'deselect' | 'button' | 'deal' | 'play' | 'botPlay' | 'flip'
@@ -101,5 +102,6 @@ export function sfx(name: Sfx, delayMs = 0): void {
 
 export function buzz(pattern: number | number[]): void {
   if (!store.get().haptics) return;
+  if (nativeBuzz(pattern)) return;
   try { navigator.vibrate?.(pattern); } catch { /* 不支持震动 */ }
 }

@@ -1,6 +1,7 @@
 /* 本地存档：设置、闯关进度、战绩。以后接 Capacitor Preferences / 云存档时只需替换 load/save。 */
 import { DEFAULT_LEVEL_ORDER, LevelOrder } from '../game/levels';
 import { Lang, detectLang } from './i18n';
+import { persistSave } from './native';
 
 export interface Stats { games: number; wins: number; totalScore: number; baseGames: number }
 const emptyStats = (): Stats => ({ games: 0, wins: 0, totalScore: 0, baseGames: 0 });
@@ -19,7 +20,8 @@ export interface SaveData {
   stats: { quick: Stats; level: Stats };
 }
 
-const KEY = 'triwits.save';
+export const SAVE_KEY = 'triwits.save';
+const KEY = SAVE_KEY;
 
 function defaults(): SaveData {
   return {
@@ -61,9 +63,13 @@ export const store = {
   get: () => data,
   update(fn: (d: SaveData) => SaveData) {
     data = fn(data);
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* 存储不可用时仅保留内存状态 */ }
+    const json = JSON.stringify(data);
+    try { localStorage.setItem(KEY, json); } catch { /* 存储不可用时仅保留内存状态 */ }
+    persistSave(KEY, json);
     listeners.forEach(l => l());
   },
+  /** 原生端启动时从 Preferences 恢复存档后重新载入 */
+  reload() { data = load(); listeners.forEach(l => l()); },
   subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; }
 };
 

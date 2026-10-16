@@ -36,6 +36,11 @@ export function TableScreen({ match, banner, onQuit, onResults, coach }: Props) 
   });
   const [menu, setMenu] = useState(false);
   const [rules, setRules] = useState(false);
+  useEffect(() => {
+    const onBack = () => { if (rules) setRules(false); else setMenu(m => !m); };
+    window.addEventListener('tw-back', onBack);
+    return () => window.removeEventListener('tw-back', onBack);
+  }, [rules]);
 
   const left = useCountdown(match.deadline);
   useGameSounds(match);
