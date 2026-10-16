@@ -111,6 +111,9 @@ const en = {
   opp_anchor: '{anchor} + a different partner each game',
 
   set_language: 'Language',
+  set_sound: 'Sound effects',
+  set_haptics: 'Vibration',
+  set_hapticsSub: 'On supported phones',
   set_dev: 'Developer',
   set_order: 'Level opponent order',
   set_order_original: 'Original',
@@ -235,6 +238,9 @@ const zh: Dict = {
   opp_anchor: '{anchor} 固定出场，每局搭配不同对手',
 
   set_language: '语言',
+  set_sound: '音效',
+  set_haptics: '震动',
+  set_hapticsSub: '支持的手机上生效',
   set_dev: '开发者',
   set_order: '闯关对手顺序',
   set_order_original: '原版',

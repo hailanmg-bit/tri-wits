@@ -265,3 +265,40 @@ h1, h2, h3 { margin: 0; }
 @keyframes req-glow { 50% { box-shadow: 0 4px 0 var(--brass-deep), 0 8px 18px rgba(0, 0, 0, .3), 0 0 26px rgba(241, 215, 155, .55); } }
 .table.land .pool.has-req .pool-stack { display: none; }
 .table.land .pool.has-req { gap: 8px; }
+
+/* ---------- 动效 ---------- */
+/* 发牌：手牌从牌桌上方依次落下（元素只在开局挂载一次） */
+.hand-card { transition: top .14s ease, left .28s ease; }
+.hand-card > .card { animation: deal .5s cubic-bezier(.2, .9, .3, 1) both; animation-delay: calc(var(--d, 0) * 32ms); }
+@keyframes deal { from { opacity: 0; transform: translateY(-46vh) rotate(-14deg) scale(.55); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+
+/* 出牌：对手的牌背落桌、牌池叠牌 */
+.drop-in { animation: drop-in .32s cubic-bezier(.2, 1.3, .5, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+@keyframes drop-in { from { opacity: 0; transform: translateY(-14px) scale(1.25); } }
+.pool-in { transform: rotate(var(--rot, 0deg)); animation: pool-in .35s cubic-bezier(.2, 1.3, .5, 1) both; }
+@keyframes pool-in { from { opacity: 0; transform: translateY(40px) rotate(0deg) scale(1.3); } to { transform: rotate(var(--rot, 0deg)); } }
+
+/* 亮牌：逐行出现、逐张翻开，赢家一行随后亮起 */
+.sd-row { animation: row-in .28s ease-out both; animation-delay: calc(var(--r, 0) * 140ms); }
+@keyframes row-in { from { opacity: 0; transform: translateY(8px); } }
+.flip-in { animation: flip-in .34s cubic-bezier(.3, .7, .4, 1) both; animation-delay: calc(var(--i, 0) * 55ms + 60ms); backface-visibility: hidden; }
+@keyframes flip-in { from { transform: perspective(300px) rotateY(90deg) scale(.9); filter: brightness(.6); } 60% { filter: none; } }
+.sd-row.win { animation: row-in .28s ease-out both, win-glow 1.2s ease-out .55s both; animation-delay: calc(var(--r, 0) * 140ms), .55s; }
+@keyframes win-glow { 0% { box-shadow: inset 0 0 0 1.5px rgba(226, 194, 126, .6), 0 0 0 0 rgba(241, 215, 155, .7); } 40% { box-shadow: inset 0 0 0 1.5px rgba(226, 194, 126, .9), 0 0 22px 4px rgba(241, 215, 155, .5); } 100% { box-shadow: inset 0 0 0 1.5px rgba(226, 194, 126, .6), 0 0 0 0 rgba(241, 215, 155, 0); } }
+.sd-row .pill { animation: pop .35s cubic-bezier(.2, 1.6, .4, 1) .6s both; }
+.showdown .req-plaque { animation-delay: .75s, 1.25s; }
+.pop { animation: pop .35s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes pop { from { opacity: 0; transform: scale(.4); } }
+
+/* 赢牌入堆：+N 浮起 */
+.opp-meta { position: relative; }
+.gain { position: absolute; right: -6px; top: -6px; z-index: 20; font: 800 20px/1 var(--font-display); color: #F6DE9E; text-shadow: 0 2px 6px rgba(0, 0, 0, .55); pointer-events: none; animation: gain 1.6s ease-out both; animation-delay: .5s; }
+.me .gain { right: auto; left: 140px; top: -14px; }
+@keyframes gain { 0% { opacity: 0; transform: translateY(10px) scale(.6); } 15% { opacity: 1; transform: translateY(0) scale(1.15); } 30% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+
+/* 结算：名次逐行进入、分数跳出 */
+.score-list li { animation: row-in .3s ease-out both; animation-delay: calc(var(--r, 0) * 120ms + 120ms); }
+.score-list .sc-val { animation: pop .4s cubic-bezier(.2, 1.6, .4, 1) both; animation-delay: calc(var(--r, 0) * 120ms + 300ms); }
+.verdict { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1) .55s both; }
+.sheet.results { animation: sheet-up .3s cubic-bezier(.2, .9, .3, 1) both; }
+@keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } }

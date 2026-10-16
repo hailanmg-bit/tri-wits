@@ -1,12 +1,13 @@
 /* 牌桌：竖屏与横屏是两套网格布局，共用同一批组件 */
-import { useEffect, useMemo, useState } from 'preact/hooks';
-import { Card, GameEvent, HandType, RankedEntry, Seat, compareCards, evalHand3 } from '../engine';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { Card, GameEvent, HandType, RankedEntry, Seat, cardKey, compareCards, evalHand3 } from '../engine';
 import { Match } from '../app/match';
 import { useCountdown, useLandscape, useSize, useSubscribe } from '../app/hooks';
 import { botName, t, typeName } from '../app/i18n';
 import { CardView, cardLabel } from './Card';
 import { Avatar, Icon, Sheet } from './common';
 import { RulesSheet } from './Rules';
+import { buzz, sfx } from '../app/sound';
 
 interface Props {
   match: Match;
@@ -32,6 +33,12 @@ export function TableScreen({ match, banner, onQuit, onResults }: Props) {
   const [rules, setRules] = useState(false);
 
   const left = useCountdown(match.deadline);
+  useGameSounds(match);
+  useEffect(() => {
+    if (left === null || left > 5 || left <= 0) return;
+    sfx(left <= 2 ? 'tickLast' : 'tick');
+    if (left <= 2) buzz(15);
+  }, [left]);
   const sameBots = g.seatStrategies[1] === g.seatStrategies[2];
   const name = (s: Seat) => (s === 0 ? t('you') : botName(g.seatStrategies[s]) + (sameBots ? ' ' + (s === 1 ? 'A' : 'B') : ''));
 
@@ -133,11 +140,12 @@ function Opponent({ match, seat, name, area }: { match: Match; seat: Seat; name:
         <div class="opp-meta">
           <div class="opp-name">{name}</div>
           <div class="muted">{t('cards', { n: g.hands[seat].length - (locked ? 3 : 0) })} · {t('pile', { n: g.piles[seat] })}</div>
+          <Gain value={g.piles[seat]} />
         </div>
       </div>
       <div class="opp-play">
         <div class="mini-stack">
-          {locked && [0, 1, 2].map(i => <CardView key={i} width={34} faceDown style={{ left: i * 16 + 'px' }} />)}
+          {locked && [0, 1, 2].map(i => <CardView key={i} width={34} faceDown class="drop-in" style={{ left: i * 16 + 'px', '--i': i }} />)}
           {waiting && <div class="slot-dashed" />}
         </div>
         <StatusPill s={statusOf(match, seat)} />
@@ -186,7 +194,7 @@ function Center({ match, name, land }: { match: Match; name: (s: Seat) => string
           {g.phase === 'p2_select' && <RequiredPlaque match={match} compact={land} />}
           <div class="pool-stack">
             {Array.from({ length: Math.min(3, lockedCount(match)) }, (_, i) => (
-              <CardView key={i} width={42} faceDown style={{ left: 6 + i * 12 + 'px', transform: `rotate(${(i - 1) * 8}deg)` }} />
+              <CardView key={i} width={42} faceDown class="pool-in" style={{ left: 6 + i * 12 + 'px', '--rot': (i - 1) * 8 + 'deg' }} />
             ))}
           </div>
           <div class="chip dark">{t('pool', { a: lockedCount(match) * 3, b: g.pending.length * 3 })}</div>
@@ -200,7 +208,7 @@ function Center({ match, name, land }: { match: Match; name: (s: Seat) => string
               <button role="tab" aria-selected={tab === 'p2'} class={tab === 'p2' ? 'on' : ''} onClick={() => setTab('p2')}>{t('phase2')}</button>
             </div>
           )}
-          {resolved[tab] && <Showdown ranked={resolved[tab]!} phase={tab} match={match} name={name} cardW={land ? 24 : 30} />}
+          {resolved[tab] && <Showdown key={g.round + tab} ranked={resolved[tab]!} phase={tab} match={match} name={name} cardW={land ? 24 : 30} />}
         </div>
       )}
       {/* 横屏中区较矮：第二阶段让位给牌型提示牌，赢家已在亮牌列表中标出 */}
@@ -249,13 +257,13 @@ function Showdown({ ranked, phase, match, name, cardW }: { ranked: RankedEntry[]
   const winner = phase === 'p1' ? g.p1Winner : g.p2Winner;
   return (
     <ol class="sd-list">
-      {ranked.map(e => {
+      {ranked.map((e, row) => {
         const cards = ((phase === 'p1' ? g.playedP1 : g.playedP2)[e.seat] || []).slice().sort(compareCards);
         return (
-          <li key={e.seat} class={'sd-row' + (e.seat === winner ? ' win' : '') + (e.ev.invalid ? ' invalid' : '')}>
+          <li key={e.seat} class={'sd-row' + (e.seat === winner ? ' win' : '') + (e.ev.invalid ? ' invalid' : '')} style={{ '--r': row }}>
             <span class="sd-name">{name(e.seat)}</span>
             <span class="sd-cards" aria-label={cards.map(cardLabel).join(', ')}>
-              {cards.map((c, i) => <CardView key={i} card={c} width={cardW} />)}
+              {cards.map((c, i) => <CardView key={i} card={c} width={cardW} class="flip-in" style={{ '--i': row * 3 + i }} />)}
             </span>
             <span class="sd-type">{typeName(e.ev.type)}{e.ev.special235 ? ' · 235' : ''}</span>
             {e.seat === winner && <span class="pill win">{t('tag_win')}</span>}
@@ -281,12 +289,13 @@ function MeRow({ match, sel }: { match: Match; sel: number[] }) {
     chip = { text: t('req_need', { type: typeName(g.requiredType) }), bad: false, ok: false, target: true };
   }
   return (
-    <section class="me">
+    <section class="me" style={{ position: 'relative' }}>
       <div class="me-left">
         <Avatar strategy={null} name={t('you')} size={36} me />
         <span class="me-name">{t('you')}</span>
         <span class="muted">{t('cards', { n: g.hands[0].length - (locked ? 3 : 0) })} · {t('pile', { n: g.piles[0] })}</span>
-        {g.base[0] > 0 && <span class="pill win">+5</span>}
+        {g.base[0] > 0 && <span class="pill win pop">+5</span>}
+        <Gain value={g.piles[0]} />
       </div>
       {chip && <span class={'chip ' + (chip.bad ? 'bad' : chip.ok ? 'ok' : chip.target ? 'outline' : 'light')}>{chip.ok ? '✓ ' : ''}{chip.text}</span>}
     </section>
@@ -315,6 +324,10 @@ function Hand({ match, sel, setSel, land }: { match: Match; sel: number[]; setSe
 
   const toggle = (i: number) => {
     if (!canPick) return;
+    const was = sel.includes(i);
+    if (!was && sel.length >= 3) return;
+    sfx(was ? 'deselect' : 'select');
+    buzz(8);
     setSel(prev => (prev.includes(i) ? prev.filter(x => x !== i) : prev.length < 3 ? [...prev, i] : prev));
   };
 
@@ -327,13 +340,13 @@ function Hand({ match, sel, setSel, land }: { match: Match; sel: number[]; setSe
         const off = Math.max(0, (W - (cardW + step * (inRow - 1))) / 2);
         return (
           <button
-            key={i}
+            key={cardKey(c)}
             class="hand-card"
             aria-pressed={on}
             aria-label={cardLabel(c)}
             disabled={!canPick}
             onClick={() => toggle(i)}
-            style={{ left: off + col * step + 'px', top: r * rowGap + (on ? 0 : lift) + 'px', zIndex: k }}
+            style={{ left: off + col * step + 'px', top: r * rowGap + (on ? 0 : lift) + 'px', zIndex: k, '--d': k }}
           >
             <CardView card={c} width={cardW} selected={on} />
           </button>
@@ -352,17 +365,17 @@ function Actions({ match, sel, setSel, onResults }: { match: Match; sel: number[
     const ending = g.holders().length <= 1;
     body = ending
       ? <button class="btn primary grow" data-act="results" onClick={() => { match.nextRound(); onResults(); }}>{t('btn_results')}</button>
-      : <button class="btn primary grow" data-act="next" onClick={() => match.nextRound()}>{t('btn_next')}</button>;
+      : <button class="btn primary grow" data-act="next" onClick={() => { sfx('button'); match.nextRound(); }}>{t('btn_next')}</button>;
   } else if (g.phase === 'p2_choose' && match.needs(0)) {
     body = <>
-      <button class="btn ghost" data-act="skip" onClick={() => match.chooseJoin(false)}>{t('btn_skip')}</button>
-      <button class="btn primary grow" data-act="join" onClick={() => match.chooseJoin(true)}>{t('btn_join')}</button>
+      <button class="btn ghost" data-act="skip" onClick={() => { sfx('button'); match.chooseJoin(false); }}>{t('btn_skip')}</button>
+      <button class="btn primary grow" data-act="join" onClick={() => { sfx('button'); match.chooseJoin(true); }}>{t('btn_join')}</button>
     </>;
   } else if ((g.phase === 'p1_select' || g.phase === 'p2_select') && match.needs(0)) {
     const invalid = sel.length === 3 && g.phase === 'p2_select' &&
       evalHand3(sel.map(i => g.hands[0][i])).type !== g.requiredType;
     body = <>
-      <button class="btn ghost" onClick={() => setSel([])} disabled={!sel.length}>{t('btn_reset')}</button>
+      <button class="btn ghost" onClick={() => { sfx('deselect'); setSel([]); }} disabled={!sel.length}>{t('btn_reset')}</button>
       <button class="btn primary grow" data-act="play" disabled={sel.length !== 3} onClick={() => match.playCards(sel)}>
         {sel.length === 3 ? t('btn_play') : t('hint_selected', { n: sel.length })}
       </button>
@@ -372,4 +385,46 @@ function Actions({ match, sel, setSel, onResults }: { match: Match; sel: number[
     body = <div class="action-wait">{g.hands[0].length ? t('prompt_wait') : t('prompt_out')}</div>;
   }
   return <section class="actions">{body}</section>;
+}
+
+/* ---------- 动效与音效 ---------- */
+
+/** 牌堆增加时浮出 +N */
+function Gain({ value }: { value: number }) {
+  const prev = useRef(value);
+  const [pop, setPop] = useState<{ n: number; k: number } | null>(null);
+  useEffect(() => {
+    const d = value - prev.current;
+    prev.current = value;
+    if (d <= 0) return;
+    setPop(p => ({ n: d, k: (p?.k ?? 0) + 1 }));
+    const id = setTimeout(() => setPop(null), 1600);
+    return () => clearTimeout(id);
+  }, [value]);
+  return pop ? <span key={pop.k} class="gain" aria-hidden="true">+{pop.n}</span> : null;
+}
+
+/** 根据引擎事件播放音效：亮牌 → 胜负 → 第二阶段开启，按时间错开 */
+function useGameSounds(match: Match) {
+  const seen = useRef(-1);
+  useEffect(() => {
+    const log = match.game.log;
+    if (seen.current < 0) { seen.current = log.length; sfx('deal'); return; }
+    const fresh = log.slice(seen.current);
+    seen.current = log.length;
+    let at = 0;
+    for (const e of fresh) {
+      switch (e.t) {
+        case 'p1Played': case 'p2Played': if (e.seat !== 0) sfx('botPlay'); else sfx('play'); break;
+        case 'p1Won': case 'p2Won':
+          sfx('flip', at); at += 380;
+          sfx(e.seat === 0 ? 'winMe' : 'winOther', at);
+          if (e.seat === 0) setTimeout(() => buzz(30), at);
+          at += 420; break;
+        case 'p2AllInvalid': sfx('flip', at); sfx('invalid', at + 380); at += 800; break;
+        case 'p2Open': sfx('phase2', at + 200); break;
+        case 'emptied': if (e.seat === 0) sfx('out', at + 200); break;
+      }
+    }
+  }, [match.version]);
 }

@@ -5,6 +5,7 @@ import { addStats, store } from './store';
 import { t } from './i18n';
 import { useStore } from './hooks';
 import { TableScreen } from '../ui/Table';
+import { sfx } from './sound';
 import { Home, LevelList, QuickSetup, Results, Settings, goalText } from '../ui/screens';
 
 type View = 'home' | 'quick' | 'levels' | 'settings' | 'game';
@@ -19,6 +20,7 @@ interface Session {
 
 /** 开发者选项：网址带 ?dev=1 时显示（对手顺序切换、解锁全部关卡） */
 const DEV = /[?&]dev=1/.test(location.search);
+if (DEV) (window as unknown as { __sfx?: typeof sfx }).__sfx = sfx;
 let nextId = 1;
 
 export function App() {

@@ -1,9 +1,10 @@
 /* 首页、快速对局设置、闯关列表、设置、结算 */
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { STRATEGY_KEYS, Seat } from '../engine';
 import { LevelConfig, LevelRun, getLevels, isUnlocked, LEVEL_ORDERS } from '../game/levels';
 import { Match } from '../app/match';
 import { SaveData, store } from '../app/store';
+import { buzz, sfx } from '../app/sound';
 import { Key, Lang, botName, setLang, t } from '../app/i18n';
 import { useStore } from '../app/hooks';
 import { Icon, Sheet } from './common';
@@ -176,6 +177,14 @@ export function Settings({ onBack, dev }: { onBack(): void; dev: boolean }) {
             <option value="zh">中文</option>
           </select>
         </div>
+        <label class="toggle">
+          <input type="checkbox" checked={d.sound} onChange={e => { set({ sound: (e.target as HTMLInputElement).checked }); sfx('button'); }} />
+          <span><b>{t('set_sound')}</b></span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" checked={d.haptics} onChange={e => { set({ haptics: (e.target as HTMLInputElement).checked }); buzz(20); }} />
+          <span><b>{t('set_haptics')}</b><small>{t('set_hapticsSub')}</small></span>
+        </label>
         {dev && <>
           <h3 class="label">{t('set_dev')}</h3>
           <div class="field">
@@ -211,6 +220,11 @@ export function Results({ match, level, onAgain, onHome, onNextGame, onRetry, on
   const name = (s: Seat) => (s === 0 ? t('you') : botName(g.seatStrategies[s]) + (sameBots ? ' ' + (s === 1 ? 'A' : 'B') : ''));
   const top = Math.max(...f);
   const run = level?.run;
+  useEffect(() => {
+    const won = run ? run.status !== 'failed' && f[0] === top : f[0] === top;
+    sfx(won ? 'gameWin' : 'gameLose', 250);
+    buzz(won ? [20, 60, 20] : 40);
+  }, []);
   const reason = run?.failReason === 'loss' ? t('lv_r_loss')
     : run?.failReason === 'forbid' ? t('lv_r_forbid')
     : run?.failReason === 'base' ? t('lv_r_base', { n: level!.cfg.goal.cond === 'streak' ? level!.cfg.goal.minBase ?? 0 : 0 })
@@ -220,8 +234,8 @@ export function Results({ match, level, onAgain, onHome, onNextGame, onRetry, on
       <div class="sheet results" role="dialog" aria-modal="true" aria-label={t('final')}>
         <h2 class="sheet-title">{t('final')}</h2>
         <ol class="score-list">
-          {order.map(s => (
-            <li key={s} class={(f[s] === top ? 'first ' : '') + (s === 0 ? 'me' : '')}>
+          {order.map((s, r) => (
+            <li key={s} class={(f[s] === top ? 'first ' : '') + (s === 0 ? 'me' : '')} style={{ '--r': r }}>
               <span class="sc-name">{name(s)}</span>
               <span class="muted">{t('scoreDetail', { b: g.base[s], p: g.piles[s] })}</span>
               <b class="sc-val">{f[s]}</b>
