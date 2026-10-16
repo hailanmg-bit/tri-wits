@@ -93,7 +93,7 @@ export class Game {
 
   /** 用指定的三手牌开局（新手教程用），每手 18 张 */
   startWith(hands: Triple<Card[]>): void {
-    this.deck = hands.flat();
+    this.deck = ([] as Card[]).concat(...hands);
     this.hands = [hands[0].slice(), hands[1].slice(), hands[2].slice()];
     this.setupPhase1();
   }
